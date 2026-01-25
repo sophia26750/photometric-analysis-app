@@ -1,0 +1,76 @@
+<!DOCTYPE html>
+<html>
+<head>
+    <style>
+        body {
+            background-color: black;
+            margin: 0;
+            padding: 0;
+            font-family: Arial, Helvetica, sans-serif;
+            color: white;
+        }
+        .center-heading {
+            font-size: 48px;
+            text-align: center;
+            margin-top: 10%;
+        }
+        .input-box {
+            text-align: center;
+            margin-top: 40px;
+        }
+        input[type="text"] {
+            padding: 12px;
+            width: 300px;
+            font-size: 20px;
+            border-radius: 6px;
+            border: none;
+        }
+        input[type="submit"] {
+            padding: 12px 20px;
+            font-size: 20px;
+            margin-left: 10px;
+            border-radius: 6px;
+            border: none;
+            cursor: pointer;
+        }
+        .center-text {
+            text-align: center;
+            margin-top: 40px;
+        }
+    </style>
+</head>
+<body>
+   
+    
+    <br><br>
+    <div style="text-align:center;">
+        <p style="font-size: 28px;">Subpages here:</p>
+        <a href="/object_calibration" style="color:white; text-decoration:none;">Object Calibration</a>
+    </div>
+
+
+    <div class="center-heading">
+        Your Text Goes Here
+    </div>
+
+    <div class="input-box">
+        <form method="POST">
+            <input type="text" name="user_input" placeholder="Type something...">
+            <input type="submit" value="Submit">
+        </form>
+    </div>
+
+    {% if user_text %}
+    <div class="center-text">
+        You entered: {{ user_text }}
+    </div>
+    {% endif %}
+
+
+
+    
+
+
+</body>
+</html>
+

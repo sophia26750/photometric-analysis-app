@@ -1,0 +1,66 @@
+<!DOCTYPE html>
+<html>
+<head>
+    <style>
+        body {
+            background-color: black;
+            color: white;
+            font-family: Arial, Helvetica, sans-serif;
+            text-align: center;
+        }
+
+        input[type="text"] {
+            width: 60%;
+            padding: 8px;
+            margin: 10px 0;
+            font-size: 16px;
+        }
+
+        input[type="submit"] {
+            padding: 10px 20px;
+            font-size: 16px;
+            margin-top: 15px;
+        }
+    </style>
+</head>
+<body>
+
+    <a href="/" style="color:white; text-decoration:none;">Back to Home</a>
+    <br><br>
+
+    <h1>Object Calibration Page</h1>
+    <p>You can calibrate one object here.</p>
+
+    <!-- Single form with two textboxes -->
+    <form method="POST">
+        <label>Enter Sloan g image link:</label><br>
+        <input type="text" name="g_link_both"><br><br>
+
+        <label>Enter Sloan r image link:</label><br>
+        <input type="text" name="r_link_both"><br><br>
+
+        <input type="submit" value="Submit">
+    </form>
+
+    {% if g_text and r_text %}
+        <div style="margin-top:20px;">
+            <h3>You entered:</h3>
+            Sloan g: {{ g_text }}<br>
+            Sloan r: {{ r_text }}
+        </div>
+    {% endif %}
+
+    {% if green_flux is not none and red_flux is not none %}
+        <div style="margin-top:20px;">
+            <h3>Calibration Results</h3>
+            Green Flux: {{ green_flux }}<br>
+            Red Flux: {{ red_flux }}<br>
+            RA List: {{ ra_list }}<br>
+            Dec List: {{ dec_list }}<br>
+            g Magnitude: {{ g }}<br>
+            r Magnitude: {{ r }}<br>
+        </div>
+    {% endif %}
+
+</body>
+</html>
