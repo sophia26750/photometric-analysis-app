@@ -24,7 +24,7 @@ import pyvo
 import pandas as pd
 
 from photutils.detection import DAOStarFinder
-from test_4 import query_apass_to_csv
+
 
 
 
