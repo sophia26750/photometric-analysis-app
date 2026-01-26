@@ -31,6 +31,8 @@
     <h1>Object Calibration Page</h1>
     <p>You can calibrate one object here.</p>
 
+    <hr style="border: 0; border-top: 0.5px solid white;">
+
     <!-- Single form with two textboxes -->
     <form method="POST">
         <label>Enter Sloan g image link:</label><br>
@@ -41,6 +43,23 @@
 
         <input type="submit" value="Submit">
     </form>
+
+    <hr style="border: 0; border-top: 0.5px solid white;">
+
+    <div id="status-line" style="font-family: monospace; white-space: pre;"></div>
+
+    <script>
+    function pollStatus() {
+        fetch("/status")
+            .then(response => response.text())
+            .then(text => {
+                document.getElementById("status-line").textContent = text;
+            });
+    }
+
+    // Update every 1 second
+    setInterval(pollStatus, 100);
+    </script>
 
     {% if g_text and r_text %}
         <div style="margin-top:20px;">
@@ -61,6 +80,9 @@
             r Magnitude: {{ r }}<br>
         </div>
     {% endif %}
+
+
+
 
 </body>
 </html>

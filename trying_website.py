@@ -25,6 +25,8 @@ import pandas as pd
 
 from photutils.detection import DAOStarFinder
 
+global status_message
+status_message = "Waiting for user input."
 
 
 
@@ -73,19 +75,30 @@ def upload_fits_file(file_path, session_token, url="http://nova.astrometry.net/a
     return subid
 
 def wait_for_job(sub_id, timeout=180):
+    global status_message
     url = f"http://nova.astrometry.net/api/submissions/{sub_id}"
     for i in range(timeout):
         r = requests.get(url).json()
         jobs = r.get("jobs", [])
         if jobs and jobs[0] is not None:
             print("Job found:", jobs[0])
+
+            
+            status_message = f"Job found: {jobs[0]}"
+
             return jobs[0]
         print("Waiting for job...", i)
+
+        
+        status_message = f"Waiting for job... {i}"
+
         time.sleep(2)
     raise TimeoutError("Job did not appear in time.")
          
 
 def query_apass_to_csv(ra_center, dec_center, radius_deg, output_csv="apass_subset.csv"):
+    global status_message
+
     """
     Query APASS DR10 catalog using GAVO TAP and save results to a CSV file.
     Args:
@@ -107,6 +120,9 @@ def query_apass_to_csv(ra_center, dec_center, radius_deg, output_csv="apass_subs
     df = result.to_table().to_pandas()
     df.to_csv(output_csv, index=False)
     print(f"Saved {output_csv}")
+    status_message = f"Saved {output_csv}"
+    status_message = f"Done!"
+
 
 
 
@@ -154,6 +170,9 @@ def wait_for_calibration(job_id, timeout=180):
 
 
 def apply_calibration_to_fits(input_fits, output_fits, cal):
+
+    global status_message
+
     """
     Apply Astrometry.net calibration JSON to a FITS file.
     """
@@ -198,6 +217,9 @@ def apply_calibration_to_fits(input_fits, output_fits, cal):
     hdul.close()
 
     print(f"WCS written to {output_fits}")
+
+    status_message = f"WCS written to {output_fits}"
+
 
 
 def flux(x, y, radius, image):
@@ -321,27 +343,36 @@ def magnitudes(csv_file, green_image, red_image, n):
 
 
 def full_calibration_with_subid(image, wcs_image_name, subid_key):
+    global status_message
 
     # 1. Login to Astrometry.net
     api_key = os.environ.get("ASTRO_LOGIN")
     session_key = login_to_astrometry(api_key)
     print("Session:", session_key)
 
+    
+    status_message = f"Session: {session_key}"
+
+
     # 2. Upload image if no subid_key provided
     if subid_key is None:
         subid_key = upload_fits_file(image, session_key)
         print("Submission ID:", subid_key)
+        status_message = f"Submission ID: {subid_key}"
     else:
         subid_key = subid_key
         print("Submission ID:", subid_key)
+        status_message = f"Submission ID: {subid_key}"
 
     # 3. Wait for job to finish
     job_id = wait_for_job(subid_key)
     print("Job ID:", job_id)
+    status_message = f"Job ID: {job_id}"
 
     # 4. Retrieve calibration results
     astro_results = wait_for_calibration(job_id)
     print("Astrometry Results:", astro_results)
+    status_message = f"Astrometry Results: {astro_results}"
 
     # 5. Apply WCS to the green image
     image = apply_calibration_to_fits(image, wcs_image_name, astro_results)
@@ -354,23 +385,32 @@ def full_calibration_with_subid(image, wcs_image_name, subid_key):
     query_apass_to_csv(ra, dec, radius, "apass_subset.csv")
 
 def full_calibration(image, wcs_image_name):
+    global status_message
 
     # 1. Login to Astrometry.net
     api_key = os.environ.get("ASTRO_LOGIN")
     session_key = login_to_astrometry(api_key)
     print("Session:", session_key)
 
+    status_message = f"Session: {session_key}"
+
     # 2. Upload image if no subid_key provided
     subid_key = upload_fits_file(image, session_key)
     print("Submission ID:", subid_key)
+
+    status_message = f"Submission ID: {subid_key}"
 
     # 3. Wait for job to finish
     job_id = wait_for_job(subid_key)
     print("Job ID:", job_id)
 
+    status_message = f"Job ID: {job_id}"
+
     # 4. Retrieve calibration results
     astro_results = wait_for_calibration(job_id)
     print("Astrometry Results:", astro_results)
+
+    status_message = f"Astrometry Results: {astro_results}"
 
     # 5. Apply WCS to the green image
     image = apply_calibration_to_fits(image, wcs_image_name, astro_results)
@@ -381,6 +421,8 @@ def full_calibration(image, wcs_image_name):
     radius = round(astro_results["radius"] * 0.5, 1)
 
     query_apass_to_csv(ra, dec, radius, "apass_subset.csv")
+    
+    status_message = f"Done!"
 
 
 
@@ -442,6 +484,9 @@ def object_calibration():
     )
 
 
+@app.route("/status")
+def status():
+    return status_message
 
 
 
