@@ -26,7 +26,7 @@ import pandas as pd
 from photutils.detection import DAOStarFinder
 
 global status_message
-status_message = "Waiting for user input."
+status_message = "Waiting for user input..."
 
 
 
@@ -84,13 +84,12 @@ def wait_for_job(sub_id, timeout=180):
             print("Job found:", jobs[0])
 
             
-            status_message = f"Job found: {jobs[0]}"
+            #status_message = f"Job found: {jobs[0]}"
+            status_message = "Job ID achieved...please wait for astrometry results"
 
             return jobs[0]
-        print("Waiting for job...", i)
-
-        
-        status_message = f"Waiting for job... {i}"
+        print("Waiting for job...", i)        
+        status_message = f"Waiting to achieve Job ID... {i}"
 
         time.sleep(2)
     raise TimeoutError("Job did not appear in time.")
@@ -120,7 +119,7 @@ def query_apass_to_csv(ra_center, dec_center, radius_deg, output_csv="apass_subs
     df = result.to_table().to_pandas()
     df.to_csv(output_csv, index=False)
     print(f"Saved {output_csv}")
-    status_message = f"Saved {output_csv}"
+    status_message = f"Saved csv file as {output_csv}..."
     status_message = f"Done!"
 
 
@@ -218,7 +217,7 @@ def apply_calibration_to_fits(input_fits, output_fits, cal):
 
     print(f"WCS written to {output_fits}")
 
-    status_message = f"WCS written to {output_fits}"
+    status_message = f"WCS written to {output_fits}..."
 
 
 
@@ -351,28 +350,33 @@ def full_calibration_with_subid(image, wcs_image_name, subid_key):
     print("Session:", session_key)
 
     
-    status_message = f"Session: {session_key}"
+    #status_message = f"Session: {session_key}"
+    status_message = f"Session key achieved...please wait for submission ID"
 
 
     # 2. Upload image if no subid_key provided
     if subid_key is None:
         subid_key = upload_fits_file(image, session_key)
         print("Submission ID:", subid_key)
-        status_message = f"Submission ID: {subid_key}"
+        #status_message = f"Submission ID: {subid_key}"
+        status_message = f"Submission ID achieved...please wait for job ID"
     else:
         subid_key = subid_key
         print("Submission ID:", subid_key)
-        status_message = f"Submission ID: {subid_key}"
+        #status_message = f"Submission ID: {subid_key}"
+        status_message = f"Submission ID achieved...please wait for job ID"
 
     # 3. Wait for job to finish
     job_id = wait_for_job(subid_key)
     print("Job ID:", job_id)
-    status_message = f"Job ID: {job_id}"
+    #status_message = f"Job ID: {job_id}"
+    status_message = f"Job ID achieved...please wait for astrometry results"
 
     # 4. Retrieve calibration results
     astro_results = wait_for_calibration(job_id)
     print("Astrometry Results:", astro_results)
-    status_message = f"Astrometry Results: {astro_results}"
+    #status_message = f"Astrometry Results: {astro_results}"
+    status_message = f"Astrometry Results achieved...please wait for WCS application"
 
     # 5. Apply WCS to the green image
     image = apply_calibration_to_fits(image, wcs_image_name, astro_results)
@@ -392,25 +396,30 @@ def full_calibration(image, wcs_image_name):
     session_key = login_to_astrometry(api_key)
     print("Session:", session_key)
 
-    status_message = f"Session: {session_key}"
+    #status_message = f"Session: {session_key}"
+    status_message = f"Session key achieved...please wait for submission ID...please be patient as this will be the longest step!"
 
     # 2. Upload image if no subid_key provided
     subid_key = upload_fits_file(image, session_key)
     print("Submission ID:", subid_key)
 
-    status_message = f"Submission ID: {subid_key}"
+    #status_message = f"Submission ID: {subid_key}"
+    status_message = f"Submission ID achieved...please wait for job ID"
 
     # 3. Wait for job to finish
     job_id = wait_for_job(subid_key)
     print("Job ID:", job_id)
 
-    status_message = f"Job ID: {job_id}"
+    #status_message = f"Job ID: {job_id}"
+    status_message = f"Job ID achieved...please wait for astrometry results"
 
     # 4. Retrieve calibration results
     astro_results = wait_for_calibration(job_id)
     print("Astrometry Results:", astro_results)
+    #status_message = f"Astrometry Results: {astro_results}"
+    status_message = f"Astrometry Results achieved...please wait for WCS application"
 
-    status_message = f"Astrometry Results: {astro_results}"
+    
 
     # 5. Apply WCS to the green image
     image = apply_calibration_to_fits(image, wcs_image_name, astro_results)

@@ -35,16 +35,21 @@
 
     <!-- Single form with two textboxes -->
     <form method="POST">
-        <label>Enter Sloan g image link:</label><br>
+        <label>Enter Sloan g image path:</label><br>
         <input type="text" name="g_link_both"><br><br>
 
-        <label>Enter Sloan r image link:</label><br>
+        <label>Enter Sloan r image path:</label><br>
         <input type="text" name="r_link_both"><br><br>
 
         <input type="submit" value="Submit">
     </form>
 
     <hr style="border: 0; border-top: 0.5px solid white;">
+
+    <p style="font-size: 15px; color: white; margin: 10px 0;">
+        <span style="font-weight: bold;">Progress of photometry:</span><br>
+    </p>
+    
 
     <div id="status-line" style="font-family: monospace; white-space: pre;"></div>
 
@@ -58,7 +63,7 @@
     }
 
     // Update every 1 second
-    setInterval(pollStatus, 100);
+    setInterval(pollStatus, 700);
     </script>
 
     {% if g_text and r_text %}
