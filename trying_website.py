@@ -117,11 +117,11 @@ def query_apass_to_csv(ra_center, dec_center, radius_deg, output_csv="apass_subs
     """
     result = service.search(query)
     df = result.to_table().to_pandas()
+    df = df.dropna(subset=["ra", "dec", "mag_g", "mag_r"])
     df.to_csv(output_csv, index=False)
     print(f"Saved {output_csv}")
     status_message = f"Saved csv file as {output_csv}..."
     status_message = f"Done!"
-
 
 
 
@@ -452,6 +452,10 @@ def object_calibration():
     user_text = None
     g_text = None
     r_text = None
+    g_file = None
+    r_file = None
+    g_path = None 
+    r_path = None
 
     green_flux = None 
     red_flux = None 
@@ -460,16 +464,79 @@ def object_calibration():
     g = None 
     r = None
 
+    upload_folder = "uploads" 
+    os.makedirs(upload_folder, exist_ok=True)
+
     if request.method == "POST":
         # Single input case
         user_text = request.form.get("calibration_input")
+
+        
 
         # Both-input case
         g_text = request.form.get("g_link_both")
         r_text = request.form.get("r_link_both")
 
+        g_file = request.files.get("g_file")
+        r_file = request.files.get("r_file")
+
+        g_path = None
+        r_path = None
+
+        if g_file and g_file.filename.strip():
+            g_path = os.path.join(upload_folder, g_file.filename)
+            g_file.save(g_path)
+
+        if r_file and r_file.filename.strip():
+            r_path = os.path.join(upload_folder, r_file.filename)
+            r_file.save(r_path)
 
 
+        # If user uploaded files, use those
+        if g_path and r_path:
+            #full_calibration_with_subid(g_path, "wcs_green_solution.fits", os.environ.get("GREEN_SUBID"))
+            #full_calibration_with_subid(r_path, "wcs_red_solution.fits", os.environ.get("RED_SUBID"))
+            full_calibration(g_path, "wcs_green_solution.fits")
+            full_calibration(r_path, "wcs_red_solution.fits")
+
+            green_flux, red_flux, ra_list, dec_list, g, r = magnitudes(
+                "apass_subset.csv",
+                "wcs_green_solution.fits",
+                "wcs_red_solution.fits",
+                10
+            )
+
+        # If user typed paths instead, use those
+        elif g_text and r_text:
+            full_calibration_with_subid(g_text, "wcs_green_solution.fits", os.environ.get("GREEN_SUBID"))
+            full_calibration_with_subid(r_text, "wcs_red_solution.fits", os.environ.get("RED_SUBID"))
+            #full_calibration(g_text, "wcs_green_solution.fits")
+            #full_calibration(r_text, "wcs_red_solution.fits")
+
+            green_flux, red_flux, ra_list, dec_list, g, r = magnitudes(
+                "apass_subset.csv",
+                "wcs_green_solution.fits",
+                "wcs_red_solution.fits",
+                10
+            )
+
+    return render_template(
+        "object_calibration.html",
+        g_text=g_text,
+        r_text=r_text,
+        green_flux=green_flux,
+        red_flux=red_flux,
+        ra_list=ra_list,
+        dec_list=dec_list,
+        g=g,
+        r=r
+    )
+
+        
+
+
+
+'''
     if g_text and r_text:
 
         #full_calibration(g_text, "wcs_green_solution.fits")
@@ -491,6 +558,7 @@ def object_calibration():
         g=g, 
         r=r
     )
+'''
 
 
 @app.route("/status")

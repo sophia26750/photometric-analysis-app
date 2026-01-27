@@ -34,7 +34,8 @@
     <hr style="border: 0; border-top: 0.5px solid white;">
 
     <!-- Single form with two textboxes -->
-    <form method="POST">
+    <form method="POST" enctype="multipart/form-data">
+
         <label>Enter Sloan g image path:</label><br>
         <input type="text" name="g_link_both"><br><br>
 
@@ -42,7 +43,30 @@
         <input type="text" name="r_link_both"><br><br>
 
         <input type="submit" value="Submit">
+        
+        
     </form>
+
+    <p style="font-size: 20px; text-align: center; margin: 20px 0;">OR</p> 
+    <br>
+    <p> You can upload your .fits files here! </p>
+    <br><br>
+
+    <form method="POST" enctype="multipart/form-data">
+        <label>Upload Sloan g FITS:</label>
+        <input type="file" name="g_file" accept=".fits">
+
+        <label>Upload Sloan r FITS:</label>
+        <input type="file" name="r_file" accept=".fits">
+
+        <button type="submit">Run Calibration</button>
+    </form>
+
+
+    
+
+
+
 
     <hr style="border: 0; border-top: 0.5px solid white;">
 
@@ -76,7 +100,7 @@
 
     {% if green_flux is not none and red_flux is not none %}
         <div style="margin-top:20px;">
-            <h3>Calibration Results</h3>
+            <h3>Photometric Analysis Results</h3>
             Green Flux: {{ green_flux }}<br>
             Red Flux: {{ red_flux }}<br>
             RA List: {{ ra_list }}<br>
