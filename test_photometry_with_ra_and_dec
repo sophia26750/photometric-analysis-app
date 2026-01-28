@@ -26,11 +26,88 @@ import pandas as pd
 
 from photutils.detection import DAOStarFinder
 
-global status_message
-status_message = "Waiting for user input..."
 
 
+def lsrl(x, y):
 
+    N1 = len(x)
+
+    sum_xsq1 = 0
+    for terms in x:
+        sum_xsq1 += terms ** 2
+
+    sum_xy1 = 0
+    for i in range(len(x)):
+        sum_xy1 += x[i] * y[i]
+
+    sum_x1 = 0
+    for terms in x:
+        sum_x1 += terms
+        
+    sum_y1 = 0
+    for terms in y:
+        sum_y1 += terms 
+    
+    q1 = np.array([[sum_y1], [sum_xy1]])
+    p1 = np.array([[N1, sum_x1], [sum_x1, sum_xsq1]])
+    matrix1 = np.dot(np.linalg.inv(p1), q1)
+    
+    m1 = matrix1[1]
+    b1 = matrix1[0]
+
+    sd1 = 0
+    
+    for i in range(len(x)):
+        sd1 += ((y[i] - (m1 * x[i] + b1)) ** 2)
+        
+    sd1 /= len(x)
+    sd1 = sd1 ** 0.5
+    
+    x2 = []
+    y2 = []
+    
+    for i in range(len(x)):
+        if (((y[i] - (m1 * x[i] + b1)) ** 2) < 4 * (sd1 ** 2)):
+            x2.append(x[i])
+            y2.append(y[i])
+            
+            
+    N2 = len(x2)
+    
+    sum_xsq2 = 0
+    for terms in x2:
+        sum_xsq2 += terms ** 2
+
+    sum_xy2 = 0
+    for i in range(len(x2)):
+        sum_xy2 += x2[i] * y2[i]
+
+    sum_x2 = 0
+    for terms in x2:
+        sum_x2 += terms
+        
+    sum_y2 = 0
+    for terms in y2:
+        sum_y2 += terms 
+    
+    q2 = np.array([[sum_y2], [sum_xy2]])
+    p2 = np.array([[N2, sum_x2], [sum_x2, sum_xsq2]])
+    matrix2 = np.dot(np.linalg.inv(p2), q2)
+    
+    m2 = matrix2[1]
+    b2 = matrix2[0]
+
+    sd2 = 0
+    
+    for i in range(len(x2)):
+        sd2 += ((y2[i] - (m2 * x2[i] + b2)) ** 2)
+        
+    sd2 /= len(x2)
+    sd2 = sd2 ** 0.5
+        
+    #slope, y-int, error
+    
+    return (m2, b2, sd2)
 
 def login_to_astrometry(api_key: str) -> str:
 	url = 'http://nova.astrometry.net/api/login'
@@ -76,7 +153,7 @@ def upload_fits_file(file_path, session_token, url="http://nova.astrometry.net/a
     return subid
 
 def wait_for_job(sub_id, timeout=180):
-    global status_message
+
     url = f"http://nova.astrometry.net/api/submissions/{sub_id}"
     for i in range(timeout):
         r = requests.get(url).json()
@@ -85,19 +162,18 @@ def wait_for_job(sub_id, timeout=180):
             print("Job found:", jobs[0])
 
             
-            #status_message = f"Job found: {jobs[0]}"
-            status_message = "Job ID achieved...please wait for astrometry results"
+            print(f"Job found: {jobs[0]}")
+
 
             return jobs[0]
         print("Waiting for job...", i)        
-        status_message = f"Waiting to achieve Job ID... {i}"
+        print(f"Waiting to achieve Job ID... {i}")
 
         time.sleep(2)
     raise TimeoutError("Job did not appear in time.")
          
 
 def query_apass_to_csv(ra_center, dec_center, radius_deg, output_csv="apass_subset.csv"):
-    global status_message
 
     """
     Query APASS DR10 catalog using GAVO TAP and save results to a CSV file.
@@ -121,8 +197,11 @@ def query_apass_to_csv(ra_center, dec_center, radius_deg, output_csv="apass_subs
     df = df.dropna(subset=["ra", "dec", "mag_g", "mag_r"])
     df.to_csv(output_csv, index=False)
     print(f"Saved {output_csv}")
-    status_message = f"Saved csv file as {output_csv}..."
-    status_message = f"Done!"
+    print(f"Saved csv file as {output_csv}...")
+    num_rows = len(df)
+    print(f"Done!")
+
+    return num_rows - 2
 
 
 
@@ -171,7 +250,6 @@ def wait_for_calibration(job_id, timeout=180):
 
 def apply_calibration_to_fits(input_fits, output_fits, cal):
 
-    global status_message
 
     """
     Apply Astrometry.net calibration JSON to a FITS file.
@@ -218,8 +296,51 @@ def apply_calibration_to_fits(input_fits, output_fits, cal):
 
     print(f"WCS written to {output_fits}")
 
-    status_message = f"WCS written to {output_fits}..."
+def target_flux(x, y, radius, image):
+    hdu = fits.open(image)
+    data = hdu[0].data
+    flux = np.array([])
 
+    
+    x_low = x - radius - 1 
+    x_high = x + radius
+    y_low = y - radius - 1
+    y_high = y + radius 
+    
+    ring = data[y_low-1:y_high+1, x_low-1:x_high+1]
+
+    plt.imshow(ring, cmap='gray_r')
+    plt.show()
+
+    #print (ring)
+    
+    background = []
+    
+    for i in range(len(ring[0])):
+        background.append(ring[0][i])
+        background.append(ring[len(ring[0]) - 1][i])
+        
+        if i != 0 and i != len(ring[0] - 1):
+            background.append(ring[i][0])
+            background.append(ring[i][len(ring[0])-1])
+
+    # print(background)
+            
+    median = np.median(background)
+    
+    star = data[y_low:y_high, x_low:x_high]
+    
+    
+    flux_num = 0
+    
+    for i in range(len(star)):
+        for j in range(len(star[0])):
+            flux_num += (star[i][j] - median)
+    if flux_num < 0:
+        flux_num = 0
+    
+    flux = np.append(flux, flux_num)
+    return flux
 
 
 def flux(x, y, radius, image):
@@ -281,7 +402,7 @@ def flux(x, y, radius, image):
         flux = np.append(flux, flux_num)
     return flux
 
-def magnitudes(csv_file, green_image, red_image, n):
+def magnitudes(csv_file, green_image, red_image, n, RA, DEC):
     data = ascii.read(csv_file, format='csv')
     hdul_g = fits.open(green_image)
     hdul_r = fits.open(red_image)
@@ -336,14 +457,99 @@ def magnitudes(csv_file, green_image, red_image, n):
     y_pixel_r = y_pixel_r.astype(int)
     
     green_flux = flux(x_pixel_g, y_pixel_g, 8, green_image)
-    red_flux = flux(x_pixel_r, y_pixel_r, 8, red_image)   
+    red_flux = flux(x_pixel_r, y_pixel_r, 8, red_image)
 
-    return green_flux, red_flux, ra_list, dec_list, g, r
+    valid_flux_g = []
+    valid_flux_r = []
+
+
+    mask = (
+    (green_flux > 0) &
+    np.isfinite(green_flux) &
+    (red_flux > 0) &
+    np.isfinite(red_flux)
+    )   
+
+    valid_flux_g = green_flux[mask]
+    valid_flux_r = red_flux[mask]
+    g = g[mask]
+    r = r[mask]
+    
+    valid_flux_g = np.array(valid_flux_g)
+    valid_flux_r = np.array(valid_flux_r)
+
+    inst_g = -2.5 * np.log10(valid_flux_g)
+    inst_r = -2.5 * np.log10(valid_flux_r)
+
+    #X1
+    inst_g_r = inst_g - inst_r
+    
+    # Y1 & X2
+    st_g_r = g - r
+    
+    # Y2
+    g_offset = g - inst_g
+
+    ##Specifically solving for the target object now.
+
+    target_pixel_g_x, target_pixel_g_y = w_g.all_world2pix(RA, DEC, 1)
+    target_pixel_r_x, target_pixel_r_y = w_r.all_world2pix(RA, DEC, 1)
+
+    target_pixel_g_x = target_pixel_g_x.astype(int)
+    target_pixel_g_y = target_pixel_g_y.astype(int)
+    target_pixel_r_x = target_pixel_r_x.astype(int)
+    target_pixel_r_y = target_pixel_r_y.astype(int)
+
+    target_flux_g = target_flux(target_pixel_g_x, target_pixel_g_y, 8, green_image)
+    target_flux_r = target_flux(target_pixel_r_x, target_pixel_r_y, 8, red_image)
+
+    target_g_inst_mag = -2.5 * np.log10(target_flux_g)
+    target_r_inst_mag = -2.5 * np.log10(target_flux_r)
+
+    m1_b1 = lsrl(inst_g_r, st_g_r)
+    m2_b2 = lsrl(st_g_r, g_offset)
+
+    new_std = m1_b1[0]*(inst_g_r) + m1_b1[1]
+    new_std_inst = m2_b2[0]*new_std + m2_b2[1] 
+    label_text = f'Tgr = {round(m1_b1[0][0], 4)} \n Cgr = {round(m1_b1[1][0], 4)}'
+    legend_entry = mlines.Line2D([], [], color='none', label=label_text)
+
+    plt.plot(inst_g_r, new_std, label=f'Tgr = {round(m1_b1[0][0], 4)} \n Cgr = {round(m1_b1[1][0], 4)}')
+    plt.scatter(inst_g_r, st_g_r)
+    plt.xlabel('Instrumental (g-r)')       
+    plt.ylabel('Standard (g-r)')       
+    plt.title('Instrumental Color Index vs. Standard Color Index for July 31')
+    plt.legend()
+    plt.show()
+    
+    
+    print(m1_b1[0], m1_b1[1], m2_b2[0], m2_b2[1])
+    plt.plot(new_std, new_std_inst, label=f"Tg = {round(m2_b2[0][0], 4)}")
+    plt.scatter(new_std, g_offset)
+    plt.xlabel('Standard (g-r)')       
+    plt.ylabel('Offset')       
+    plt.title('Standard Color Index vs. Green Offset for July 31')
+    plt.legend()
+    plt.show()
+    
+    standard_g_r_target = m1_b1[0]*(target_g_inst_mag - target_r_inst_mag) + m1_b1[1]
+    standard_g_target = m2_b2[0]*standard_g_r_target + m2_b2[1] + target_g_inst_mag
+    
+    
+
+
+
+    standard_r_target = standard_g_target - standard_g_r_target
+
+    error_g, error_r = m1_b1[2], m2_b2[2]
+    
+    print(error_g, error_r)
+    
+    return (standard_g_target, standard_r_target, error_g, error_r, calibration_num) 
 
 
 
 def full_calibration_with_subid(image, wcs_image_name, subid_key):
-    global status_message
 
     # 1. Login to Astrometry.net
     api_key = os.environ.get("ASTRO_LOGIN")
@@ -351,33 +557,29 @@ def full_calibration_with_subid(image, wcs_image_name, subid_key):
     print("Session:", session_key)
 
     
-    #status_message = f"Session: {session_key}"
-    status_message = f"Session key achieved...please wait for submission ID"
+
+    print(f"Session key achieved...please wait for submission ID")
 
 
     # 2. Upload image if no subid_key provided
     if subid_key is None:
         subid_key = upload_fits_file(image, session_key)
         print("Submission ID:", subid_key)
-        #status_message = f"Submission ID: {subid_key}"
-        status_message = f"Submission ID achieved...please wait for job ID"
+
     else:
         subid_key = subid_key
         print("Submission ID:", subid_key)
-        #status_message = f"Submission ID: {subid_key}"
-        status_message = f"Submission ID achieved...please wait for job ID"
+
 
     # 3. Wait for job to finish
     job_id = wait_for_job(subid_key)
     print("Job ID:", job_id)
-    #status_message = f"Job ID: {job_id}"
-    status_message = f"Job ID achieved...please wait for astrometry results"
+
 
     # 4. Retrieve calibration results
     astro_results = wait_for_calibration(job_id)
     print("Astrometry Results:", astro_results)
-    #status_message = f"Astrometry Results: {astro_results}"
-    status_message = f"Astrometry Results achieved...please wait for WCS application"
+
 
     # 5. Apply WCS to the green image
     image = apply_calibration_to_fits(image, wcs_image_name, astro_results)
@@ -385,42 +587,36 @@ def full_calibration_with_subid(image, wcs_image_name, subid_key):
     # 6. Query APASS around the solved coordinates
     ra = astro_results["ra"]
     dec = astro_results["dec"]
-    radius = round(astro_results["radius"] * 0.5, 1)
+    radius = round(astro_results["radius"] * 0.4, 1)
 
-    query_apass_to_csv(ra, dec, radius, "apass_subset.csv")
+    num_rows = query_apass_to_csv(ra, dec, radius, "apass_subset.csv")
+    return num_rows
 
 def full_calibration(image, wcs_image_name):
-    global status_message
+
 
     # 1. Login to Astrometry.net
     api_key = os.environ.get("ASTRO_LOGIN")
     session_key = login_to_astrometry(api_key)
     print("Session:", session_key)
 
-    #status_message = f"Session: {session_key}"
-    status_message = f"Session key achieved...please wait for submission ID...please be patient as this will be the longest step!"
-
+   
     # 2. Upload image if no subid_key provided
     subid_key = upload_fits_file(image, session_key)
     print("Submission ID:", subid_key)
 
-    #status_message = f"Submission ID: {subid_key}"
-    status_message = f"Submission ID achieved...please wait for job ID"
+
 
     # 3. Wait for job to finish
     job_id = wait_for_job(subid_key)
     print("Job ID:", job_id)
 
-    #status_message = f"Job ID: {job_id}"
-    status_message = f"Job ID achieved...please wait for astrometry results"
+
 
     # 4. Retrieve calibration results
     astro_results = wait_for_calibration(job_id)
     print("Astrometry Results:", astro_results)
-    #status_message = f"Astrometry Results: {astro_results}"
-    status_message = f"Astrometry Results achieved...please wait for WCS application"
 
-    
 
     # 5. Apply WCS to the green image
     image = apply_calibration_to_fits(image, wcs_image_name, astro_results)
@@ -430,164 +626,27 @@ def full_calibration(image, wcs_image_name):
     dec = astro_results["dec"]
     radius = round(astro_results["radius"] * 0.5, 1)
 
-    query_apass_to_csv(ra, dec, radius, "apass_subset.csv")
+    num_rows = query_apass_to_csv(ra, dec, radius, "apass_subset.csv")
+    return num_rows
     
-    status_message = f"Done!"
 
 
 
+print(os.environ.get("SUBMISSION_ID_GREEN")) 
+full_calibration_with_subid("/Users/admin/source/yspa-research-code/fits_files/r_july13-t24-mvn-green_stacked.fits", "wcs_green_solution.fits", os.environ.get("GREEN_SUBID")) #14288193 "/Users/admin/source/yspa-research-code/fits_files/r_july15-home40-mvn-green-all_stacked.fits"
+num_rows = full_calibration_with_subid("/Users/admin/source/yspa-research-code/fits_files/r_july13-t24-mvn-red_stacked.fits", "wcs_red_solution.fits", os.environ.get("RED_SUBID")) #14288194 /Users/admin/source/yspa-research-code/fits_files/r_july15-home40-mvn-red-all_stacked.fits"
+#full_calibration("/Users/admin/source/yspa-research-code/fits_files/r_july15-home40-mvn-green-all_stacked.fits", "wcs_green_solution.fits") 
+#num_rows = full_calibration("/Users/admin/source/yspa-research-code/fits_files/r_july15-home40-mvn-red-all_stacked.fits", "wcs_red_solution.fits")
 
-app = Flask(__name__)
-
-@app.route("/", methods=["GET", "POST"])
-def home():
-    user_text = None
-
-    if request.method == "POST":
-        user_text = request.form.get("user_input")
-
-    return render_template("index.html", user_text=user_text)
-
-@app.route("/object_calibration", methods=["GET", "POST"])
-def object_calibration():
-    user_text = None
-    g_text = None
-    r_text = None
-    g_file = None
-    r_file = None
-    g_path = None 
-    r_path = None
-
-    green_flux = None 
-    red_flux = None 
-    ra_list = None 
-    dec_list = None 
-    g = None 
-    r = None
-
-    ra_decimal = None
-    dec_decimal = None
-    ra_hms = None
-    dec_dms = None
-
-    upload_folder = "uploads" 
-    os.makedirs(upload_folder, exist_ok=True)
-
-    if request.method == "POST":
-        # Single input case
-        user_text = request.form.get("calibration_input")
-
-        
-
-        # Both-input case
-        g_text = request.form.get("g_link_both")
-        r_text = request.form.get("r_link_both")
-
-        g_file = request.files.get("g_file")
-        r_file = request.files.get("r_file")
-
-        ra_decimal = request.form.get("ra_decimal") 
-        dec_decimal = request.form.get("dec_decimal") 
-        ra_hms = request.form.get("ra_hms") 
-        dec_dms = request.form.get("dec_dms")
-    
-    # Convert RA/Dec to decimal degrees 
-    if ra_decimal and dec_decimal: 
-        ra_deg = float(ra_decimal) 
-        dec_deg = float(dec_decimal)
-    elif ra_hms and dec_dms: 
-        coord = SkyCoord(ra_hms, dec_dms, unit=(u.hourangle, u.deg)) 
-        ra_deg = coord.ra.deg 
-        dec_deg = coord.dec.deg
-
-        
-
-    if g_file and g_file.filename.strip():
-        g_path = os.path.join(upload_folder, g_file.filename)
-        g_file.save(g_path)
-
-    if r_file and r_file.filename.strip():
-        r_path = os.path.join(upload_folder, r_file.filename)
-        r_file.save(r_path)
+print(magnitudes(
+    "apass_subset.csv",
+    "wcs_green_solution.fits",
+    "wcs_red_solution.fits",
+    20,
+    198.366170833, 
+    36.586586
+))
 
 
-    # If user uploaded files, use those
-    if g_path and r_path:
-        #full_calibration_with_subid(g_path, "wcs_green_solution.fits", os.environ.get("GREEN_SUBID"))
-        #full_calibration_with_subid(r_path, "wcs_red_solution.fits", os.environ.get("RED_SUBID"))
-        full_calibration(g_path, "wcs_green_solution.fits")
-        full_calibration(r_path, "wcs_red_solution.fits")
-
-        green_flux, red_flux, ra_list, dec_list, g, r = magnitudes(
-            "apass_subset.csv",
-            "wcs_green_solution.fits",
-            "wcs_red_solution.fits",
-            10
-        )
-
-    # If user typed paths instead, use those
-    elif g_text and r_text:
-        full_calibration_with_subid(g_text, "wcs_green_solution.fits", os.environ.get("GREEN_SUBID"))
-        full_calibration_with_subid(r_text, "wcs_red_solution.fits", os.environ.get("RED_SUBID"))
-        #full_calibration(g_text, "wcs_green_solution.fits")
-        #full_calibration(r_text, "wcs_red_solution.fits")
-
-        green_flux, red_flux, ra_list, dec_list, g, r = magnitudes(
-            "apass_subset.csv",
-            "wcs_green_solution.fits",
-            "wcs_red_solution.fits",
-            10
-        )
-
-    return render_template(
-        "object_calibration.html",
-        g_text=g_text,
-        r_text=r_text,
-        green_flux=green_flux,
-        red_flux=red_flux,
-        ra_list=ra_list,
-        dec_list=dec_list,
-        g=g,
-        r=r
-    )
-
-        
-
-
-
-'''
-    if g_text and r_text:
-
-        #full_calibration(g_text, "wcs_green_solution.fits")
-        #full_calibration(r_text, "wcs_red_solution.fits")
-        full_calibration_with_subid(g_text, "wcs_green_solution.fits", os.environ.get("GREEN_SUBID"))
-        full_calibration_with_subid(r_text, "wcs_red_solution.fits", os.environ.get("RED_SUBID"))
-        green_flux, red_flux, ra_list, dec_list, g, r = magnitudes("apass_subset.csv", "wcs_green_solution.fits", "wcs_red_solution.fits", 10)
-
-
-    return render_template(
-        "object_calibration.html",
-        user_text=user_text,
-        g_text=g_text,
-        r_text=r_text,
-        green_flux=green_flux, 
-        red_flux=red_flux, 
-        ra_list=ra_list, 
-        dec_list=dec_list, 
-        g=g, 
-        r=r
-    )
-'''
-
-
-@app.route("/status")
-def status():
-    return status_message
-
-
-
-
-if __name__ == "__main__":
-    app.run(debug=True)
 
 
