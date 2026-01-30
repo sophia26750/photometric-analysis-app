@@ -17,6 +17,11 @@ from astropy.table import Table
 from astropy.io import ascii
 import astropy.units as u
 
+from photutils.aperture import CircularAperture, CircularAnnulus, aperture_photometry
+from astropy.stats import SigmaClip
+from photutils.background import Background2D, MedianBackground
+
+
 from matplotlib.patches import Circle
 import matplotlib.pyplot as plt 
 import matplotlib.lines as mlines
@@ -25,6 +30,7 @@ import pyvo
 import pandas as pd
 
 from photutils.detection import DAOStarFinder
+
 
 
 
@@ -296,111 +302,128 @@ def apply_calibration_to_fits(input_fits, output_fits, cal):
 
     print(f"WCS written to {output_fits}")
 
+#def apply_calibration_to_fits(input_fits, output_fits, cal):
+    """
+    Apply Astrometry.net calibration JSON to a FITS file.
+    """
+
+    # Load FITS
+    hdul = fits.open(input_fits)
+    hdr = hdul[0].header
+
+    # Extract calibration values
+    ra = cal["ra"]
+    dec = cal["dec"]
+    pixscale = cal["pixscale"] / 3600.0   # arcsec → deg
+    theta = np.deg2rad(cal["orientation"])
+    parity = cal["parity"]
+
+    # Correct CD matrix reconstruction (Astrometry.net convention)
+    cd11 = -pixscale * np.cos(theta)
+    cd12 =  pixscale * np.sin(theta)
+    cd21 = -parity * pixscale * np.sin(theta)
+    cd22 = -parity * pixscale * np.cos(theta)
+
+    # Build WCS
+    w = WCS(naxis=2)
+    w.wcs.crval = [ra, dec]
+    w.wcs.crpix = [hdr["NAXIS1"] / 2.0, hdr["NAXIS2"] / 2.0]
+    w.wcs.cd = np.array([[cd11, cd12],
+                         [cd21, cd22]])
+    w.wcs.ctype = ["RA---TAN", "DEC--TAN"]
+
+    # Update header
+    hdr.update(w.to_header())
+
+    # Save new FITS
+    hdul.writeto(output_fits, overwrite=True)
+    hdul.close()
+
+    print(f"WCS written to {output_fits}")
+
+
+
 def target_flux(x, y, radius, image):
-    hdu = fits.open(image)
-    data = hdu[0].data
-    flux = np.array([])
+    """
+    Same as flux(), but for a single target star.
+    """
+    data = fits.getdata(image)
 
-    
-    x_low = x - radius - 1 
-    x_high = x + radius
-    y_low = y - radius - 1
-    y_high = y + radius 
-    
-    ring = data[y_low-1:y_high+1, x_low-1:x_high+1]
+    position = np.array([[x, y]])
 
-    plt.imshow(ring, cmap='gray_r')
-    plt.show()
+    aperture = CircularAperture(position, r=radius)
+    annulus = CircularAnnulus(position, r_in=radius+3, r_out=radius+6)
 
-    #print (ring)
-    
-    background = []
-    
-    for i in range(len(ring[0])):
-        background.append(ring[0][i])
-        background.append(ring[len(ring[0]) - 1][i])
-        
-        if i != 0 and i != len(ring[0] - 1):
-            background.append(ring[i][0])
-            background.append(ring[i][len(ring[0])-1])
+    aper_phot = aperture_photometry(data, aperture)
+    ann_phot = aperture_photometry(data, annulus)
 
-    # print(background)
-            
-    median = np.median(background)
-    
-    star = data[y_low:y_high, x_low:x_high]
-    
-    
-    flux_num = 0
-    
-    for i in range(len(star)):
-        for j in range(len(star[0])):
-            flux_num += (star[i][j] - median)
-    if flux_num < 0:
-        flux_num = 0
-    
-    flux = np.append(flux, flux_num)
-    return flux
+    bkg_mean = ann_phot['aperture_sum'] / annulus.area
+    final_flux = aper_phot['aperture_sum'] - bkg_mean * aperture.area
+
+    return np.array([max(final_flux[0], 0)])
+
 
 
 def flux(x, y, radius, image):
-    hdu = fits.open(image)
-    data = hdu[0].data
-    flux = np.array([])
+    """
+    Perform circular aperture photometry with an annulus background.
+    x, y: arrays of centroid positions (floats)
+    radius: aperture radius in pixels
+    image: FITS filename
+    """
+    data = fits.getdata(image)
 
-    for i in range(len(x)):
-        x_low = x[i] - radius - 1 
-        x_high = x[i] + radius
-        y_low = y[i] - radius - 1
-        y_high = y[i] + radius 
-        
-        ring = data[y_low-1:y_high+1, x_low-1:x_high+1]
-        
-        
+    # Convert to Nx2 array of positions
+    positions = np.column_stack((x, y))
 
-        if (
-            x_low - 1 < 0 or x_high + 1 >= data.shape[1] or
-            y_low - 1 < 0 or y_high + 1 >= data.shape[0]
-        ):
-            hdul = fits.open(image)
-            wcs = WCS(hdul[0])
-            ra, dec = wcs.all_pix2world(x[i], y[i], 0)
-            print(f"Skipping star at ({ra}, {dec}): out of bounds")
-            continue
-        
-        
-        plt.imshow(ring, cmap='gray_r')
-        plt.show()
+    # Circular aperture
+    aperture = CircularAperture(positions, r=radius)
 
-        #print (ring)
-        
-        background = []
-        
-        for i in range(len(ring[0])):
-            background.append(ring[0][i])
-            background.append(ring[len(ring[0]) - 1][i])
-            
-            if i != 0 and i != len(ring[0] - 1):
-                background.append(ring[i][0])
-                background.append(ring[i][len(ring[0])-1])
+    # Background annulus (3 px wide)
+    annulus = CircularAnnulus(positions, r_in=radius+3, r_out=radius+6)
 
-        # print(background)
-                
-        median = np.median(background)
-        
-        star = data[y_low:y_high, x_low:x_high]
-        
-        
-        flux_num = 0
-        
-        for i in range(len(star)):
-            for j in range(len(star[0])):
-                flux_num += (star[i][j] - median)
-        if flux_num < 0:
-            flux_num = 0
-        
-        flux = np.append(flux, flux_num)
-    return flux
+    # Perform photometry
+    aper_phot = aperture_photometry(data, aperture)
+    ann_phot = aperture_photometry(data, annulus)
+
+    # Compute background per pixel
+    bkg_mean = ann_phot['aperture_sum'] / annulus.area
+
+    # Subtract background from aperture flux
+    final_flux = aper_phot['aperture_sum'] - bkg_mean * aperture.area
+
+    # Replace negative flux with zero
+    final_flux = np.where(final_flux > 0, final_flux, 0)
+
+    return np.array(final_flux)
+
+
+
+def detect_stars(image, fwhm=3.0, sigma=3.0, threshold=5.0):
+    data = fits.getdata(image)
+    mean, median, std = sigma_clipped_stats(data, sigma=sigma)
+    daofind = DAOStarFinder(fwhm=fwhm, threshold=threshold * std)
+    sources = daofind(data - median)
+    return sources
+
+
+def show_star(image_data, x, y, size=20):
+    """
+    Display a zoomed-in cutout around a detected star.
+    x, y: centroid coordinates (floats)
+    size: half-width of the cutout in pixels
+    """
+    x = int(x)
+    y = int(y)
+
+    cutout = image_data[y-size:y+size, x-size:x+size]
+
+    plt.figure(figsize=(5,5))
+    plt.imshow(cutout, cmap='gray', origin='lower')
+    plt.colorbar(label="Pixel value")
+    plt.title(f"Star at ({x}, {y})")
+    plt.show()
+
 
 def magnitudes(csv_file, green_image, red_image, n, RA, DEC):
     data = ascii.read(csv_file, format='csv')
@@ -450,14 +473,121 @@ def magnitudes(csv_file, green_image, red_image, n, RA, DEC):
             r = np.append(r, data['mag_r'][i])
 
             j += 1
+
+    # === Visualize RED WCS solution ===
+    hdul_r = fits.open(red_image)
+    image_data_r = hdul_r[0].data
+    vmin_r, vmax_r = np.percentile(image_data_r, [5, 99])
+
+    fig = plt.figure(figsize=(10,8))
+    ax = plt.subplot(projection=w_r)
+    ax.imshow(image_data_r, cmap="gray", origin="lower", vmin=vmin_r, vmax=vmax_r)
+
+    # plot APASS stars (red band)
+    ax.scatter(x_pixel_r, y_pixel_r, s=80, edgecolor='cyan', facecolor='none', linewidth=1.5)
+
+    plt.title("RED WCS Check: APASS stars projected onto image")
+    plt.xlabel("RA")
+    plt.ylabel("Dec")
+    plt.show()
+
             
+    vmin, vmax = np.percentile(image_data, [5, 99])
+    fig = plt.figure(figsize=(10,8))
+    ax = plt.subplot(projection=w_g)
+    ax.imshow(image_data, cmap="gray", origin="lower", vmin=vmin, vmax=vmax)
+
+    # plot APASS stars
+    ax.scatter(x_pixel_g, y_pixel_g, s=50, edgecolor='red', facecolor='none')
+
+    plt.show()
+    '''
     x_pixel_g = x_pixel_g.astype(int)
     y_pixel_g = y_pixel_g.astype(int)
     x_pixel_r = x_pixel_r.astype(int)
     y_pixel_r = y_pixel_r.astype(int)
+    '''
+   # === 1. Remove APASS stars outside the image ===
+    ny, nx = image_data.shape
+
+    inside = (
+        (x_pixel_g >= 0) & (x_pixel_g < nx) &
+        (y_pixel_g >= 0) & (y_pixel_g < ny)
+    )
+
+    x_pixel_g = x_pixel_g[inside]
+    y_pixel_g = y_pixel_g[inside]
+    x_pixel_r = x_pixel_r[inside]
+    y_pixel_r = y_pixel_r[inside]
+    g = g[inside]
+    r = r[inside]
+
+    print("APASS stars inside image:", len(x_pixel_g))
+
+
+    # === 2. Detect stars in the green image ===
+    sources = detect_stars(green_image, threshold=3.0)
+    det_x = np.array(sources['xcentroid'])
+    det_y = np.array(sources['ycentroid'])
+
+    print("Detected stars:", len(det_x))
+
+    # === 3. Convert detected centroids to RA/Dec ===
+    det_ra, det_dec = w_g.all_pix2world(det_x, det_y, 1)
+    det_coords = SkyCoord(det_ra * u.deg, det_dec * u.deg, frame="icrs")
+
+    # === 4. Build SkyCoord for APASS catalog ===
+    cat_ra = data['ra']
+    cat_dec = data['dec']
+    cat_coords = SkyCoord(cat_ra * u.deg, cat_dec * u.deg, frame="icrs")
+
+    # === 5. Match each detected star to nearest APASS star ===
+    idx, sep2d, _ = det_coords.match_to_catalog_sky(cat_coords)
+
+    # VERY strict matching: only keep stars within 1 arcsec
+    max_sep = 5.0 * u.arcsec
+    good = sep2d < max_sep
+
+    print("Matched APASS stars:", np.sum(good))
+
+    # Keep only matched detections
+    matched_det_x = det_x[good]
+    matched_det_y = det_y[good]
+    matched_cat_ix = idx[good]
+
+    # Pull standard magnitudes from APASS
+    g = data['mag_g'][matched_cat_ix]
+    r = data['mag_r'][matched_cat_ix]
+
+    # === DEBUG: visualize one matched star ===
+    image_data = fits.getdata(green_image)
+    for i in range(len(x_flux)):
+        print(f"Calibration star {i+1}/{len(x_flux)}")
+        show_star(image_data, x_flux[i], y_flux[i])
+
+
+
+
+
+    # === 5. Use detected centroids for flux extraction ===
+    x_flux = matched_det_x
+    y_flux = matched_det_y
+
+    # === 6. Filter out faint APASS stars (critical!) ===
+    bright = (g < 16.0)   # or 15.5 if you want even cleaner stars
+    x_flux = x_flux[bright]
+    y_flux = y_flux[bright]
+    g = g[bright]
+    r = r[bright]
+
+    print("Final calibration stars after brightness filter:", len(g))
+
+
+
     
-    green_flux = flux(x_pixel_g, y_pixel_g, 8, green_image)
-    red_flux = flux(x_pixel_r, y_pixel_r, 8, red_image)
+    green_flux = flux(x_flux, y_flux, 5, green_image)
+    red_flux = flux(x_flux, y_flux, 5, red_image)
+
 
     valid_flux_g = []
     valid_flux_r = []
@@ -495,13 +625,14 @@ def magnitudes(csv_file, green_image, red_image, n, RA, DEC):
     target_pixel_g_x, target_pixel_g_y = w_g.all_world2pix(RA, DEC, 1)
     target_pixel_r_x, target_pixel_r_y = w_r.all_world2pix(RA, DEC, 1)
 
+    '''
     target_pixel_g_x = target_pixel_g_x.astype(int)
     target_pixel_g_y = target_pixel_g_y.astype(int)
     target_pixel_r_x = target_pixel_r_x.astype(int)
     target_pixel_r_y = target_pixel_r_y.astype(int)
-
-    target_flux_g = target_flux(target_pixel_g_x, target_pixel_g_y, 8, green_image)
-    target_flux_r = target_flux(target_pixel_r_x, target_pixel_r_y, 8, red_image)
+    '''
+    target_flux_g = target_flux(target_pixel_g_x, target_pixel_g_y, 4, green_image)
+    target_flux_r = target_flux(target_pixel_r_x, target_pixel_r_y, 4, red_image)
 
     target_g_inst_mag = -2.5 * np.log10(target_flux_g)
     target_r_inst_mag = -2.5 * np.log10(target_flux_r)
@@ -587,7 +718,7 @@ def full_calibration_with_subid(image, wcs_image_name, subid_key):
     # 6. Query APASS around the solved coordinates
     ra = astro_results["ra"]
     dec = astro_results["dec"]
-    radius = round(astro_results["radius"] * 0.4, 1)
+    radius = round(astro_results["radius"] * 0.6, 1)
 
     num_rows = query_apass_to_csv(ra, dec, radius, "apass_subset.csv")
     return num_rows
@@ -624,7 +755,7 @@ def full_calibration(image, wcs_image_name):
     # 6. Query APASS around the solved coordinates
     ra = astro_results["ra"]
     dec = astro_results["dec"]
-    radius = round(astro_results["radius"] * 0.5, 1)
+    radius = round(astro_results["radius"] * 0.6, 1)
 
     num_rows = query_apass_to_csv(ra, dec, radius, "apass_subset.csv")
     return num_rows
@@ -632,17 +763,17 @@ def full_calibration(image, wcs_image_name):
 
 
 
-print(os.environ.get("SUBMISSION_ID_GREEN")) 
-full_calibration_with_subid("/Users/admin/source/yspa-research-code/fits_files/r_july13-t24-mvn-green_stacked.fits", "wcs_green_solution.fits", os.environ.get("GREEN_SUBID")) #14288193 "/Users/admin/source/yspa-research-code/fits_files/r_july15-home40-mvn-green-all_stacked.fits"
-num_rows = full_calibration_with_subid("/Users/admin/source/yspa-research-code/fits_files/r_july13-t24-mvn-red_stacked.fits", "wcs_red_solution.fits", os.environ.get("RED_SUBID")) #14288194 /Users/admin/source/yspa-research-code/fits_files/r_july15-home40-mvn-red-all_stacked.fits"
-#full_calibration("/Users/admin/source/yspa-research-code/fits_files/r_july15-home40-mvn-green-all_stacked.fits", "wcs_green_solution.fits") 
-#num_rows = full_calibration("/Users/admin/source/yspa-research-code/fits_files/r_july15-home40-mvn-red-all_stacked.fits", "wcs_red_solution.fits")
+
+full_calibration_with_subid("/Users/admin/source/yspa-research-code/fits_files/r_july13-t24-mvn-green_stacked.fits", "wcs_green_solution.fits", 14296169) #14296169 "/Users/admin/source/yspa-research-code/fits_files/r_july15-home40-mvn-green-all_stacked.fits"
+num_rows = full_calibration_with_subid("/Users/admin/source/yspa-research-code/fits_files/r_july13-t24-mvn-red_stacked.fits", "wcs_red_solution.fits", 14296177) #14296177 /Users/admin/source/yspa-research-code/fits_files/r_july15-home40-mvn-red-all_stacked.fits"
+#full_calibration("/Users/admin/source/yspa-research-code/fits_files/r_july13-t24-mvn-green_stacked.fits", "wcs_green_solution.fits") 
+#num_rows = full_calibration("/Users/admin/source/yspa-research-code/fits_files/r_july13-t24-mvn-red_stacked.fits", "wcs_red_solution.fits")
 
 print(magnitudes(
     "apass_subset.csv",
     "wcs_green_solution.fits",
     "wcs_red_solution.fits",
-    20,
+    num_rows,
     198.366170833, 
     36.586586
 ))
