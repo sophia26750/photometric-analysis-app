@@ -545,7 +545,7 @@ def magnitudes(csv_file, green_image, red_image, n, RA, DEC):
     idx, sep2d, _ = det_coords.match_to_catalog_sky(cat_coords)
 
     # VERY strict matching: only keep stars within 1 arcsec
-    max_sep = 5.0 * u.arcsec
+    max_sep = 3.8 * u.arcsec
     good = sep2d < max_sep
 
     print("Matched APASS stars:", np.sum(good))
@@ -558,14 +558,6 @@ def magnitudes(csv_file, green_image, red_image, n, RA, DEC):
     # Pull standard magnitudes from APASS
     g = data['mag_g'][matched_cat_ix]
     r = data['mag_r'][matched_cat_ix]
-
-    # === DEBUG: visualize one matched star ===
-    image_data = fits.getdata(green_image)
-    for i in range(len(x_flux)):
-        print(f"Calibration star {i+1}/{len(x_flux)}")
-        show_star(image_data, x_flux[i], y_flux[i])
-
-
 
 
 
@@ -581,8 +573,6 @@ def magnitudes(csv_file, green_image, red_image, n, RA, DEC):
     r = r[bright]
 
     print("Final calibration stars after brightness filter:", len(g))
-
-
 
     
     green_flux = flux(x_flux, y_flux, 5, green_image)
@@ -625,14 +615,15 @@ def magnitudes(csv_file, green_image, red_image, n, RA, DEC):
     target_pixel_g_x, target_pixel_g_y = w_g.all_world2pix(RA, DEC, 1)
     target_pixel_r_x, target_pixel_r_y = w_r.all_world2pix(RA, DEC, 1)
 
+
     '''
     target_pixel_g_x = target_pixel_g_x.astype(int)
     target_pixel_g_y = target_pixel_g_y.astype(int)
     target_pixel_r_x = target_pixel_r_x.astype(int)
     target_pixel_r_y = target_pixel_r_y.astype(int)
     '''
-    target_flux_g = target_flux(target_pixel_g_x, target_pixel_g_y, 4, green_image)
-    target_flux_r = target_flux(target_pixel_r_x, target_pixel_r_y, 4, red_image)
+    target_flux_g = target_flux(target_pixel_g_x, target_pixel_g_y, 8, green_image)
+    target_flux_r = target_flux(target_pixel_r_x, target_pixel_r_y, 8, red_image)
 
     target_g_inst_mag = -2.5 * np.log10(target_flux_g)
     target_r_inst_mag = -2.5 * np.log10(target_flux_r)
@@ -774,8 +765,8 @@ print(magnitudes(
     "wcs_green_solution.fits",
     "wcs_red_solution.fits",
     num_rows,
-    198.366170833, 
-    36.586586
+    198.49989,
+    36.439874
 ))
 
 
