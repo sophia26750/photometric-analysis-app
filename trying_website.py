@@ -205,8 +205,11 @@ def query_apass_to_csv(ra_center, dec_center, radius_deg, output_csv="apass_subs
     df = df.dropna(subset=["ra", "dec", "mag_g", "mag_r"])
     df.to_csv(output_csv, index=False)
     print(f"Saved {output_csv}")
+    num_rows = len(df)
     status_message = f"Saved csv file as {output_csv}..."
     status_message = f"Done!"
+
+    return num_rows - 2
 
 
 
@@ -409,9 +412,12 @@ def full_calibration_with_subid(image, wcs_image_name, subid_key):
     # 6. Query APASS around the solved coordinates
     ra = astro_results["ra"]
     dec = astro_results["dec"]
-    radius = round(astro_results["radius"] * 0.5, 1)
+    radius = round(astro_results["radius"] * 0.6, 1)
 
-    query_apass_to_csv(ra, dec, radius, "apass_subset.csv")
+    num_rows = query_apass_to_csv(ra, dec, radius, "apass_subset.csv")
+    status_message = f"Done!"
+    
+    return num_rows
 
 def full_calibration(image, wcs_image_name):
     global status_message
@@ -454,9 +460,12 @@ def full_calibration(image, wcs_image_name):
     dec = astro_results["dec"]
     radius = round(astro_results["radius"] * 0.5, 1)
 
-    query_apass_to_csv(ra, dec, radius, "apass_subset.csv")
-    
+    num_rows = query_apass_to_csv(ra, dec, radius, "apass_subset.csv")
     status_message = f"Done!"
+
+    return num_rows
+    
+    
 
 def magnitudes(csv_file, green_image, red_image, n, RA, DEC):
     data = ascii.read(csv_file, format='csv')
@@ -507,33 +516,33 @@ def magnitudes(csv_file, green_image, red_image, n, RA, DEC):
 
             j += 1
 
-    # === Visualize RED WCS solution ===
-    hdul_r = fits.open(red_image)
-    image_data_r = hdul_r[0].data
-    vmin_r, vmax_r = np.percentile(image_data_r, [5, 99])
+    # # === Visualize RED WCS solution ===
+    # hdul_r = fits.open(red_image)
+    # image_data_r = hdul_r[0].data
+    # vmin_r, vmax_r = np.percentile(image_data_r, [5, 99])
 
-    fig = plt.figure(figsize=(10,8))
-    ax = plt.subplot(projection=w_r)
-    ax.imshow(image_data_r, cmap="gray", origin="lower", vmin=vmin_r, vmax=vmax_r)
+    # fig = plt.figure(figsize=(10,8))
+    # ax = plt.subplot(projection=w_r)
+    # ax.imshow(image_data_r, cmap="gray", origin="lower", vmin=vmin_r, vmax=vmax_r)
 
-    # plot APASS stars (red band)
-    ax.scatter(x_pixel_r, y_pixel_r, s=80, edgecolor='cyan', facecolor='none', linewidth=1.5)
+    # # plot APASS stars (red band)
+    # ax.scatter(x_pixel_r, y_pixel_r, s=80, edgecolor='cyan', facecolor='none', linewidth=1.5)
 
-    plt.title("RED WCS Check: APASS stars projected onto image")
-    plt.xlabel("RA")
-    plt.ylabel("Dec")
-    plt.show()
+    # plt.title("RED WCS Check: APASS stars projected onto image")
+    # plt.xlabel("RA")
+    # plt.ylabel("Dec")
+    # plt.show()
 
             
-    vmin, vmax = np.percentile(image_data, [5, 99])
-    fig = plt.figure(figsize=(10,8))
-    ax = plt.subplot(projection=w_g)
-    ax.imshow(image_data, cmap="gray", origin="lower", vmin=vmin, vmax=vmax)
+    # vmin, vmax = np.percentile(image_data, [5, 99])
+    # fig = plt.figure(figsize=(10,8))
+    # ax = plt.subplot(projection=w_g)
+    # ax.imshow(image_data, cmap="gray", origin="lower", vmin=vmin, vmax=vmax)
 
-    # plot APASS stars
-    ax.scatter(x_pixel_g, y_pixel_g, s=50, edgecolor='red', facecolor='none')
+    # # plot APASS stars
+    # ax.scatter(x_pixel_g, y_pixel_g, s=50, edgecolor='red', facecolor='none')
 
-    plt.show()
+    # plt.show()
     '''
     x_pixel_g = x_pixel_g.astype(int)
     y_pixel_g = y_pixel_g.astype(int)
@@ -578,7 +587,7 @@ def magnitudes(csv_file, green_image, red_image, n, RA, DEC):
     idx, sep2d, _ = det_coords.match_to_catalog_sky(cat_coords)
 
     # VERY strict matching: only keep stars within 1 arcsec
-    max_sep = 3.8 * u.arcsec
+    max_sep = 4.5 * u.arcsec
     good = sep2d < max_sep
 
     print("Matched APASS stars:", np.sum(good))
@@ -599,7 +608,7 @@ def magnitudes(csv_file, green_image, red_image, n, RA, DEC):
     y_flux = matched_det_y
 
     # === 6. Filter out faint APASS stars (critical!) ===
-    bright = (g < 16.0)   # or 15.5 if you want even cleaner stars
+    bright = (g < 16.5)   # or 15.5 if you want even cleaner stars
     x_flux = x_flux[bright]
     y_flux = y_flux[bright]
     g = g[bright]
@@ -608,8 +617,8 @@ def magnitudes(csv_file, green_image, red_image, n, RA, DEC):
     print("Final calibration stars after brightness filter:", len(g))
 
     
-    green_flux = flux(x_flux, y_flux, 5, green_image)
-    red_flux = flux(x_flux, y_flux, 5, red_image)
+    green_flux = flux(x_flux, y_flux, 8, green_image)
+    red_flux = flux(x_flux, y_flux, 8, red_image)
 
 
     valid_flux_g = []
@@ -655,8 +664,8 @@ def magnitudes(csv_file, green_image, red_image, n, RA, DEC):
     target_pixel_r_x = target_pixel_r_x.astype(int)
     target_pixel_r_y = target_pixel_r_y.astype(int)
     '''
-    target_flux_g = target_flux(target_pixel_g_x, target_pixel_g_y, 8, green_image)
-    target_flux_r = target_flux(target_pixel_r_x, target_pixel_r_y, 8, red_image)
+    target_flux_g = target_flux(target_pixel_g_x, target_pixel_g_y, 9, green_image)
+    target_flux_r = target_flux(target_pixel_r_x, target_pixel_r_y, 9, red_image)
 
     target_g_inst_mag = -2.5 * np.log10(target_flux_g)
     target_r_inst_mag = -2.5 * np.log10(target_flux_r)
@@ -669,23 +678,23 @@ def magnitudes(csv_file, green_image, red_image, n, RA, DEC):
     label_text = f'Tgr = {round(m1_b1[0][0], 4)} \n Cgr = {round(m1_b1[1][0], 4)}'
     legend_entry = mlines.Line2D([], [], color='none', label=label_text)
 
-    plt.plot(inst_g_r, new_std, label=f'Tgr = {round(m1_b1[0][0], 4)} \n Cgr = {round(m1_b1[1][0], 4)}')
-    plt.scatter(inst_g_r, st_g_r)
-    plt.xlabel('Instrumental (g-r)')       
-    plt.ylabel('Standard (g-r)')       
-    plt.title('Instrumental Color Index vs. Standard Color Index for July 31')
-    plt.legend()
-    plt.show()
+    # plt.plot(inst_g_r, new_std, label=f'Tgr = {round(m1_b1[0][0], 4)} \n Cgr = {round(m1_b1[1][0], 4)}')
+    # plt.scatter(inst_g_r, st_g_r)
+    # plt.xlabel('Instrumental (g-r)')       
+    # plt.ylabel('Standard (g-r)')       
+    # plt.title('Instrumental Color Index vs. Standard Color Index for July 31')
+    # plt.legend()
+    # plt.show()
     
     
-    print(m1_b1[0], m1_b1[1], m2_b2[0], m2_b2[1])
-    plt.plot(new_std, new_std_inst, label=f"Tg = {round(m2_b2[0][0], 4)}")
-    plt.scatter(new_std, g_offset)
-    plt.xlabel('Standard (g-r)')       
-    plt.ylabel('Offset')       
-    plt.title('Standard Color Index vs. Green Offset for July 31')
-    plt.legend()
-    plt.show()
+    # print(m1_b1[0], m1_b1[1], m2_b2[0], m2_b2[1])
+    # plt.plot(new_std, new_std_inst, label=f"Tg = {round(m2_b2[0][0], 4)}")
+    # plt.scatter(new_std, g_offset)
+    # plt.xlabel('Standard (g-r)')       
+    # plt.ylabel('Offset')       
+    # plt.title('Standard Color Index vs. Green Offset for July 31')
+    # plt.legend()
+    # plt.show()
     
     standard_g_r_target = m1_b1[0]*(target_g_inst_mag - target_r_inst_mag) + m1_b1[1]
     standard_g_target = m2_b2[0]*standard_g_r_target + m2_b2[1] + target_g_inst_mag
@@ -750,19 +759,35 @@ def object_calibration():
         g_file = request.files.get("g_file")
         r_file = request.files.get("r_file")
 
-        ra_decimal = request.form.get("ra_decimal") 
-        dec_decimal = request.form.get("dec_decimal") 
-        ra_hms = request.form.get("ra_hms") 
+        ra_decimal = request.form.get("ra_decimal")
+        dec_decimal = request.form.get("dec_decimal")
+        ra_hms = request.form.get("ra_hms")
         dec_dms = request.form.get("dec_dms")
-    
-    # Convert RA/Dec to decimal degrees 
-    if ra_decimal and dec_decimal: 
-        ra_deg = float(ra_decimal) 
-        dec_deg = float(dec_decimal)
-    elif ra_hms and dec_dms: 
-        coord = SkyCoord(ra_hms, dec_dms, unit=(u.hourangle, u.deg)) 
-        ra_deg = coord.ra.deg 
-        dec_deg = coord.dec.deg
+
+        # Option A: decimal degrees
+        if ra_decimal and dec_decimal:
+            try:
+                ra_deg = float(ra_decimal)
+                dec_deg = float(dec_decimal)
+            except ValueError:
+                pass
+
+        # Option B: HMS/DMS
+        elif ra_hms and dec_dms:
+            try:
+                coord = SkyCoord(ra_hms, dec_dms, unit=(u.hourangle, u.deg))
+                ra_deg = coord.ra.deg
+                dec_deg = coord.dec.deg
+            except Exception:
+                pass
+
+        # If neither option was provided
+        if ra_deg is None or dec_deg is None:
+            return render_template(
+                "object_calibration.html",
+                error_message="Please enter RA/Dec in either decimal or HMS/DMS format."
+            )
+
 
         
 
@@ -777,16 +802,18 @@ def object_calibration():
 
     # If user uploaded files, use those
     if g_path and r_path:
-        #full_calibration_with_subid(g_path, "wcs_green_solution.fits", os.environ.get("GREEN_SUBID"))
-        #full_calibration_with_subid(r_path, "wcs_red_solution.fits", os.environ.get("RED_SUBID"))
-        full_calibration(g_path, "wcs_green_solution.fits")
-        full_calibration(r_path, "wcs_red_solution.fits")
+        full_calibration_with_subid(g_path, "wcs_green_solution.fits", os.environ.get("GREEN_SUBID"))
+        num_rows = full_calibration_with_subid(r_path, "wcs_red_solution.fits", os.environ.get("RED_SUBID"))
+        #full_calibration(g_path, "wcs_green_solution.fits")
+        #full_calibration(r_path, "wcs_red_solution.fits")
 
-        green_flux, red_flux, ra_list, dec_list, g, r = magnitudes(
+        standard_g_target, standard_r_target, error_g, error_r, calibration_num = magnitudes(
             "apass_subset.csv",
             "wcs_green_solution.fits",
             "wcs_red_solution.fits",
-            10
+            num_rows,
+            ra_deg,
+            dec_deg
         )
 
     # If user typed paths instead, use those
@@ -796,7 +823,7 @@ def object_calibration():
         #full_calibration(g_text, "wcs_green_solution.fits")
         #full_calibration(r_text, "wcs_red_solution.fits")
 
-        standard_g_target, standard_r_target, error_g, error_r, calibration_num = green_flux, red_flux, ra_list, dec_list, g, r = magnitudes(
+        standard_g_target, standard_r_target, error_g, error_r, calibration_num = magnitudes(
             "apass_subset.csv",
             "wcs_green_solution.fits",
             "wcs_red_solution.fits",

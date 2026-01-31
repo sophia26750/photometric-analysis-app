@@ -36,19 +36,30 @@
 
      <p style="font-size: 20px; text-align: center; margin: 20px 0;">Please input the Right Ascension and Declination of your Target Object:</p> 
 
-    <label>RA (decimal degrees):</label>
-    <input type="text" name="ra_decimal">
 
-    <br><br>
-    <p>OR</p> 
-    <br><br>
-
-    <label>Dec (decimal degrees):</label>
-    <input type="text" name="dec_decimal">
-    <br><br>
-
-    <!-- Single form with two textboxes -->
     <form method="POST" enctype="multipart/form-data">
+
+        <h2>Enter Target Coordinates</h2>
+
+        <!-- Decimal input -->
+        <label>RA (decimal degrees):</label><br>
+        <input type="text" name="ra_decimal" placeholder="e.g. 198.36617"><br><br>
+
+        <label>Dec (decimal degrees):</label><br>
+        <input type="text" name="dec_decimal" placeholder="e.g. 36.586586"><br><br>
+
+        <p>OR</p>
+
+        <!-- Sexagesimal input -->
+        <label>RA (HMS):</label><br>
+        <input type="text" name="ra_hms" placeholder="e.g. 13h 14m 38.8s"><br><br>
+
+        <label>Dec (DMS):</label><br>
+        <input type="text" name="dec_dms" placeholder="e.g. +36° 35′ 11.7″"><br><br>
+
+        <hr>
+
+        <h2>Provide Sloan g and r Images</h2>
 
         <label>Enter Sloan g image path:</label><br>
         <input type="text" name="g_link_both"><br><br>
@@ -56,25 +67,18 @@
         <label>Enter Sloan r image path:</label><br>
         <input type="text" name="r_link_both"><br><br>
 
-        <input type="submit" value="Submit">
-        
-        
-    </form>
+        <p>OR upload FITS files:</p>
 
-    <p style="font-size: 20px; text-align: center; margin: 20px 0;">OR</p> 
-    <br>
-    <p> You can upload your .fits files here! </p>
-    <br><br>
-
-    <form method="POST" enctype="multipart/form-data">
         <label>Upload Sloan g FITS:</label>
-        <input type="file" name="g_file" accept=".fits">
+        <input type="file" name="g_file" accept=".fits"><br><br>
 
         <label>Upload Sloan r FITS:</label>
-        <input type="file" name="r_file" accept=".fits">
+        <input type="file" name="r_file" accept=".fits"><br><br>
 
         <button type="submit">Run Calibration</button>
+
     </form>
+
 
 
     
@@ -112,17 +116,18 @@
         </div>
     {% endif %}
 
-    {% if green_flux is not none and red_flux is not none %}
-        <div style="margin-top:20px;">
-            <h3>Photometric Analysis Results</h3>
-            Green Flux: {{ green_flux }}<br>
-            Red Flux: {{ red_flux }}<br>
-            RA List: {{ ra_list }}<br>
-            Dec List: {{ dec_list }}<br>
-            g Magnitude: {{ g }}<br>
-            r Magnitude: {{ r }}<br>
-        </div>
-    {% endif %}
+{% if standard_g_target is not none and standard_r_target is not none %}
+    <div style="margin-top:20px;">
+        <h3>Photometric Analysis Results</h3>
+
+        Standard g Magnitude: {{ standard_g_target }}<br>
+        Standard r Magnitude: {{ standard_r_target }}<br>
+        Error in g: {{ error_g }}<br>
+        Error in r: {{ error_r }}<br>
+
+    </div>
+{% endif %}
+
 
 
 
