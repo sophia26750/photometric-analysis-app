@@ -516,33 +516,6 @@ def magnitudes(csv_file, green_image, red_image, n, RA, DEC):
 
             j += 1
 
-    # # === Visualize RED WCS solution ===
-    # hdul_r = fits.open(red_image)
-    # image_data_r = hdul_r[0].data
-    # vmin_r, vmax_r = np.percentile(image_data_r, [5, 99])
-
-    # fig = plt.figure(figsize=(10,8))
-    # ax = plt.subplot(projection=w_r)
-    # ax.imshow(image_data_r, cmap="gray", origin="lower", vmin=vmin_r, vmax=vmax_r)
-
-    # # plot APASS stars (red band)
-    # ax.scatter(x_pixel_r, y_pixel_r, s=80, edgecolor='cyan', facecolor='none', linewidth=1.5)
-
-    # plt.title("RED WCS Check: APASS stars projected onto image")
-    # plt.xlabel("RA")
-    # plt.ylabel("Dec")
-    # plt.show()
-
-            
-    # vmin, vmax = np.percentile(image_data, [5, 99])
-    # fig = plt.figure(figsize=(10,8))
-    # ax = plt.subplot(projection=w_g)
-    # ax.imshow(image_data, cmap="gray", origin="lower", vmin=vmin, vmax=vmax)
-
-    # # plot APASS stars
-    # ax.scatter(x_pixel_g, y_pixel_g, s=50, edgecolor='red', facecolor='none')
-
-    # plt.show()
     '''
     x_pixel_g = x_pixel_g.astype(int)
     y_pixel_g = y_pixel_g.astype(int)
@@ -677,24 +650,6 @@ def magnitudes(csv_file, green_image, red_image, n, RA, DEC):
     new_std_inst = m2_b2[0]*new_std + m2_b2[1] 
     label_text = f'Tgr = {round(m1_b1[0][0], 4)} \n Cgr = {round(m1_b1[1][0], 4)}'
     legend_entry = mlines.Line2D([], [], color='none', label=label_text)
-
-    # plt.plot(inst_g_r, new_std, label=f'Tgr = {round(m1_b1[0][0], 4)} \n Cgr = {round(m1_b1[1][0], 4)}')
-    # plt.scatter(inst_g_r, st_g_r)
-    # plt.xlabel('Instrumental (g-r)')       
-    # plt.ylabel('Standard (g-r)')       
-    # plt.title('Instrumental Color Index vs. Standard Color Index for July 31')
-    # plt.legend()
-    # plt.show()
-    
-    
-    # print(m1_b1[0], m1_b1[1], m2_b2[0], m2_b2[1])
-    # plt.plot(new_std, new_std_inst, label=f"Tg = {round(m2_b2[0][0], 4)}")
-    # plt.scatter(new_std, g_offset)
-    # plt.xlabel('Standard (g-r)')       
-    # plt.ylabel('Offset')       
-    # plt.title('Standard Color Index vs. Green Offset for July 31')
-    # plt.legend()
-    # plt.show()
     
     standard_g_r_target = m1_b1[0]*(target_g_inst_mag - target_r_inst_mag) + m1_b1[1]
     standard_g_target = m2_b2[0]*standard_g_r_target + m2_b2[1] + target_g_inst_mag
@@ -802,10 +757,10 @@ def object_calibration():
 
     # If user uploaded files, use those
     if g_path and r_path:
-        full_calibration_with_subid(g_path, "wcs_green_solution.fits", os.environ.get("GREEN_SUBID"))
-        num_rows = full_calibration_with_subid(r_path, "wcs_red_solution.fits", os.environ.get("RED_SUBID"))
-        #full_calibration(g_path, "wcs_green_solution.fits")
-        #full_calibration(r_path, "wcs_red_solution.fits")
+        #full_calibration_with_subid(g_path, "wcs_green_solution.fits", os.environ.get("GREEN_SUBID"))
+        #num_rows = full_calibration_with_subid(r_path, "wcs_red_solution.fits", os.environ.get("RED_SUBID"))
+        full_calibration(g_path, "wcs_green_solution.fits")
+        full_calibration(r_path, "wcs_red_solution.fits")
 
         standard_g_target, standard_r_target, error_g, error_r, calibration_num = magnitudes(
             "apass_subset.csv",
@@ -818,10 +773,10 @@ def object_calibration():
 
     # If user typed paths instead, use those
     elif g_text and r_text:
-        full_calibration_with_subid(g_text, "wcs_green_solution.fits", os.environ.get("GREEN_SUBID"))
-        num_rows = full_calibration_with_subid(r_text, "wcs_red_solution.fits", os.environ.get("RED_SUBID"))
-        #full_calibration(g_text, "wcs_green_solution.fits")
-        #full_calibration(r_text, "wcs_red_solution.fits")
+        #full_calibration_with_subid(g_text, "wcs_green_solution.fits", os.environ.get("GREEN_SUBID"))
+        #num_rows = full_calibration_with_subid(r_text, "wcs_red_solution.fits", os.environ.get("RED_SUBID"))
+        full_calibration(g_text, "wcs_green_solution.fits")
+        num_rows = full_calibration(r_text, "wcs_red_solution.fits")
 
         standard_g_target, standard_r_target, error_g, error_r, calibration_num = magnitudes(
             "apass_subset.csv",
@@ -842,33 +797,6 @@ def object_calibration():
         error_r=error_r,
     )
 
-        
-
-
-
-'''
-    if g_text and r_text:
-
-        #full_calibration(g_text, "wcs_green_solution.fits")
-        #full_calibration(r_text, "wcs_red_solution.fits")
-        full_calibration_with_subid(g_text, "wcs_green_solution.fits", os.environ.get("GREEN_SUBID"))
-        full_calibration_with_subid(r_text, "wcs_red_solution.fits", os.environ.get("RED_SUBID"))
-        green_flux, red_flux, ra_list, dec_list, g, r = magnitudes("apass_subset.csv", "wcs_green_solution.fits", "wcs_red_solution.fits", 10)
-
-
-    return render_template(
-        "object_calibration.html",
-        user_text=user_text,
-        g_text=g_text,
-        r_text=r_text,
-        green_flux=green_flux, 
-        red_flux=red_flux, 
-        ra_list=ra_list, 
-        dec_list=dec_list, 
-        g=g, 
-        r=r
-    )
-'''
 
 
 @app.route("/status")
