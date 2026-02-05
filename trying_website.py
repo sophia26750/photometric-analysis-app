@@ -226,34 +226,6 @@ def wait_for_calibration(job_id, timeout=180):
         time.sleep(2)
 
     return None
-   
-
-
-
-
-
-
-    """
-    Query APASS DR10 catalog using GAVO TAP and save results to a CSV file.
-    Args:
-        ra_center (float): Right Ascension of center (degrees)
-        dec_center (float): Declination of center (degrees)
-        radius_deg (float): Search radius (degrees)
-        output_csv (str): Output CSV filename
-    """
-    service = pyvo.dal.TAPService("https://dc.g-vo.org/tap")
-    query = f"""
-    SELECT * 
-    FROM apass.dr10
-    WHERE 1 = CONTAINS(
-        POINT('ICRS', ra, dec),
-        CIRCLE('ICRS', {ra_center}, {dec_center}, {radius_deg})
-    )
-    """
-    result = service.search(query)
-    df = result.to_table().to_pandas()
-    df.to_csv(output_csv, index=False)
-    print(f"Saved {output_csv}")
 
 
 def apply_calibration_to_fits(input_fits, output_fits, cal):
