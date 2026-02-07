@@ -35,87 +35,6 @@ global status_message
 status_message = "Waiting for user input..."
 
 
-def lsrl(x, y):
-
-    N1 = len(x)
-
-    sum_xsq1 = 0
-    for terms in x:
-        sum_xsq1 += terms ** 2
-
-    sum_xy1 = 0
-    for i in range(len(x)):
-        sum_xy1 += x[i] * y[i]
-
-    sum_x1 = 0
-    for terms in x:
-        sum_x1 += terms
-        
-    sum_y1 = 0
-    for terms in y:
-        sum_y1 += terms 
-    
-    q1 = np.array([[sum_y1], [sum_xy1]])
-    p1 = np.array([[N1, sum_x1], [sum_x1, sum_xsq1]])
-    matrix1 = np.dot(np.linalg.inv(p1), q1)
-    
-    m1 = matrix1[1]
-    b1 = matrix1[0]
-
-    sd1 = 0
-    
-    for i in range(len(x)):
-        sd1 += ((y[i] - (m1 * x[i] + b1)) ** 2)
-        
-    sd1 /= len(x)
-    sd1 = sd1 ** 0.5
-    
-    x2 = []
-    y2 = []
-    
-    for i in range(len(x)):
-        if (((y[i] - (m1 * x[i] + b1)) ** 2) < 4 * (sd1 ** 2)):
-            x2.append(x[i])
-            y2.append(y[i])
-            
-            
-    N2 = len(x2)
-    
-    sum_xsq2 = 0
-    for terms in x2:
-        sum_xsq2 += terms ** 2
-
-    sum_xy2 = 0
-    for i in range(len(x2)):
-        sum_xy2 += x2[i] * y2[i]
-
-    sum_x2 = 0
-    for terms in x2:
-        sum_x2 += terms
-        
-    sum_y2 = 0
-    for terms in y2:
-        sum_y2 += terms 
-    
-    q2 = np.array([[sum_y2], [sum_xy2]])
-    p2 = np.array([[N2, sum_x2], [sum_x2, sum_xsq2]])
-    matrix2 = np.dot(np.linalg.inv(p2), q2)
-    
-    m2 = matrix2[1]
-    b2 = matrix2[0]
-
-    sd2 = 0
-    
-    for i in range(len(x2)):
-        sd2 += ((y2[i] - (m2 * x2[i] + b2)) ** 2)
-        
-    sd2 /= len(x2)
-    sd2 = sd2 ** 0.5
-        
-    #slope, y-int, error
-    
-    return (m2, b2, sd2)
-
 def login_to_astrometry(api_key: str) -> str:
 	url = 'http://nova.astrometry.net/api/login'
 	payload = {'request-json': json.dumps({"apikey": api_key})}
@@ -159,6 +78,25 @@ def upload_fits_file(file_path, session_token, url="http://nova.astrometry.net/a
         subid = None
     return subid
 
+def safe_get_json(url):
+    """
+    Safely GET a URL and return JSON if possible.
+    If the response is not JSON, print an error and return None.
+    """
+    try:
+        resp = requests.get(url, timeout=10)
+    except Exception as e:
+        print(f"Network error while requesting {url}: {e}")
+        return None
+
+    try:
+        return resp.json()
+    except ValueError:
+        print(f"Astrometry.net returned non‑JSON response for {url}:")
+        status_message = f"Astrometry.net returned non‑JSON response for {url}: {resp.text[:500]} ... Please try again later."
+        print(resp.text[:500])  # print first 500 chars for debugging
+        return None
+
 def wait_for_job(sub_id, timeout=180):
     global status_message
     url = f"http://nova.astrometry.net/api/submissions/{sub_id}"
@@ -168,8 +106,6 @@ def wait_for_job(sub_id, timeout=180):
         if jobs and jobs[0] is not None:
             print("Job found:", jobs[0])
 
-            
-            #status_message = f"Job found: {jobs[0]}"
             status_message = "Job ID achieved...please wait for astrometry results"
 
             return jobs[0]
@@ -178,7 +114,85 @@ def wait_for_job(sub_id, timeout=180):
 
         time.sleep(2)
     raise TimeoutError("Job did not appear in time.")
+    status_message = "Error: Astrometry.net did not return a job ID in time."
          
+
+
+def wait_for_calibration(job_id, timeout=180):
+    url = f"http://nova.astrometry.net/api/jobs/{job_id}/calibration/"
+    
+    for _ in range(timeout):
+        r = safe_get_json(url)
+        if r is None:
+            print("Error: Could not retrieve calibration status.")
+            return None
+
+        # Calibration is ready
+        if "ra" in r:
+            return r
+
+        time.sleep(2)
+
+    return None
+
+
+def apply_calibration_to_fits(input_fits, output_fits, job_id):
+
+    global status_message
+
+    """
+    Safely apply the exact WCS header from Astrometry.net by embedding
+    the downloaded header into a valid FITS HDU before parsing.
+    """
+
+    # 1. Download WCS header text
+    wcs_url = f"http://nova.astrometry.net/wcs_file/{job_id}"
+    r = requests.get(wcs_url)
+    r.raise_for_status()
+    wcs_header_text = r.text
+
+    # 2. Convert raw header text into a Header object manually
+    #    (no parsing yet — just splitting lines)
+    header_lines = wcs_header_text.split("\n")
+
+    # 3. Build a minimal valid FITS header
+    hdr = fits.Header()
+
+    # Required FITS cards
+    hdr["SIMPLE"] = True
+    hdr["BITPIX"] = -32
+    hdr["NAXIS"] = 0
+    hdr["EXTEND"] = True
+
+    # Append all WCS cards
+    for line in header_lines:
+        line = line.strip()
+        if len(line) >= 8 and "=" in line[:10]:
+            key = line[:8].strip()
+            val_comment = line[9:].strip()
+            try:
+                hdr[key] = val_comment
+            except Exception:
+                pass  # ignore malformed cards safely
+
+    # 4. Now Astropy can parse this header safely
+    wcs = WCS(hdr)
+
+    # 5. Merge WCS into your real FITS file
+    with fits.open(input_fits) as hdul:
+        data = hdul[0].data
+        real_hdr = hdul[0].header
+
+        for key, val in hdr.items():
+            real_hdr[key] = val
+
+        fits.writeto(output_fits, data, real_hdr, overwrite=True)
+
+    print(f"Exact Astrometry.net WCS written to {output_fits}")
+    status_message = f"WCS written to {output_fits}..."
+
+    return wcs
+
 
 def query_apass_to_csv(ra_center, dec_center, radius_deg, output_csv="apass_subset.csv"):
     global status_message
@@ -212,134 +226,6 @@ def query_apass_to_csv(ra_center, dec_center, radius_deg, output_csv="apass_subs
     return num_rows - 2
 
 
-
-def wait_for_calibration(job_id, timeout=180):
-    url = f"http://nova.astrometry.net/api/jobs/{job_id}/calibration/"
-    
-    for _ in range(timeout):
-        r = requests.get(url).json()
-
-        # Calibration is ready
-        if "ra" in r:
-            return r
-
-        time.sleep(2)
-
-    return None
-
-
-def apply_calibration_to_fits(input_fits, output_fits, cal):
-
-    global status_message
-
-    """
-    Apply Astrometry.net calibration JSON to a FITS file.
-    """
-
-    # Extract calibration values
-    ra = cal["ra"]
-    dec = cal["dec"]
-    pixscale = cal["pixscale"] / 3600.0   # arcsec → deg
-    orient = np.deg2rad(cal["orientation"])
-    parity = cal["parity"]
-
-    # Load FITS
-    hdul = fits.open(input_fits)
-    hdr = hdul[0].header
-    data = hdul[0].data
-    ny, nx = data.shape
-
-    # Compute CRPIX
-    crpix1 = nx / 2.0
-    crpix2 = ny / 2.0
-
-    # CD matrix
-    sgn = -1 if parity < 0 else 1
-    cd11 = -pixscale * np.cos(orient)
-    cd12 =  pixscale * np.sin(orient)
-    cd21 =  pixscale * np.sin(orient) * sgn
-    cd22 =  pixscale * np.cos(orient) * sgn
-
-    # Build WCS
-    w = WCS(naxis=2)
-    w.wcs.crval = [ra, dec]
-    w.wcs.crpix = [crpix1, crpix2]
-    w.wcs.cd = np.array([[cd11, cd12],
-                         [cd21, cd22]])
-    w.wcs.ctype = ["RA---TAN", "DEC--TAN"]
-
-    # Update FITS header
-    hdr.update(w.to_header())
-
-    # Save new FITS
-    hdul.writeto(output_fits, overwrite=True)
-    hdul.close()
-
-    print(f"WCS written to {output_fits}")
-
-    status_message = f"WCS written to {output_fits}..."
-
-
-
-def target_flux(x, y, radius, image):
-    """
-    Same as flux(), but for a single target star.
-    """
-    data = fits.getdata(image)
-
-    position = np.array([[x, y]])
-
-    aperture = CircularAperture(position, r=radius)
-    annulus = CircularAnnulus(position, r_in=radius+3, r_out=radius+6)
-
-    aper_phot = aperture_photometry(data, aperture)
-    ann_phot = aperture_photometry(data, annulus)
-
-    bkg_mean = ann_phot['aperture_sum'] / annulus.area
-    final_flux = aper_phot['aperture_sum'] - bkg_mean * aperture.area
-
-    return np.array([max(final_flux[0], 0)])
-
-
-def flux(x, y, radius, image):
-    """
-    Perform circular aperture photometry with an annulus background.
-    x, y: arrays of centroid positions (floats)
-    radius: aperture radius in pixels
-    image: FITS filename
-    """
-    data = fits.getdata(image)
-
-    # Convert to Nx2 array of positions
-    positions = np.column_stack((x, y))
-
-    # Circular aperture
-    aperture = CircularAperture(positions, r=radius)
-
-    # Background annulus (3 px wide)
-    annulus = CircularAnnulus(positions, r_in=radius+3, r_out=radius+6)
-
-    # Perform photometry
-    aper_phot = aperture_photometry(data, aperture)
-    ann_phot = aperture_photometry(data, annulus)
-
-    # Compute background per pixel
-    bkg_mean = ann_phot['aperture_sum'] / annulus.area
-
-    # Subtract background from aperture flux
-    final_flux = aper_phot['aperture_sum'] - bkg_mean * aperture.area
-
-    # Replace negative flux with zero
-    final_flux = np.where(final_flux > 0, final_flux, 0)
-
-    return np.array(final_flux)
-
-def detect_stars(image, fwhm=3.0, sigma=3.0, threshold=5.0):
-    data = fits.getdata(image)
-    mean, median, std = sigma_clipped_stats(data, sigma=sigma)
-    daofind = DAOStarFinder(fwhm=fwhm, threshold=threshold * std)
-    sources = daofind(data - median)
-    return sources
 
 def full_calibration_with_subid(image, wcs_image_name, subid_key):
     global status_message
@@ -398,6 +284,8 @@ def full_calibration_with_subid(image, wcs_image_name, subid_key):
     
     return num_rows
 
+
+
 def full_calibration(image, wcs_image_name):
     global status_message
 
@@ -444,7 +332,109 @@ def full_calibration(image, wcs_image_name):
 
     return num_rows
     
-    
+def detect_stars(image, fwhm=3.0, sigma=3.0, threshold=5.0):
+    data = fits.getdata(image)
+    mean, median, std = sigma_clipped_stats(data, sigma=sigma)
+    daofind = DAOStarFinder(fwhm=fwhm, threshold=threshold * std)
+    sources = daofind(data - median)
+    return sources
+
+
+def match_detected_to_apass(det_x, det_y, wcs, apass_csv, max_arcsec=1.2):
+
+    # Convert detections to RA/Dec
+    det_ra, det_dec = wcs.all_pix2world(det_x, det_y, 1)
+    det_coords = SkyCoord(det_ra*u.deg, det_dec*u.deg)
+
+    # Load APASS
+    cat = pd.read_csv(apass_csv)
+    cat_coords = SkyCoord(cat["ra"].values*u.deg,
+                          cat["dec"].values*u.deg)
+
+    # Match
+    idx, sep2d, _ = det_coords.match_to_catalog_sky(cat_coords)
+
+    # Keep only very close matches
+    good = sep2d < (max_arcsec * u.arcsec)
+
+    matched = {
+        "det_x": det_x[good],
+        "det_y": det_y[good],
+        "cat_index": idx[good],
+        "sep_arcsec": sep2d[good].arcsec,
+        "g": cat["mag_g"].values[idx[good]],
+        "r": cat["mag_r"].values[idx[good]]
+    }
+
+    return matched
+
+
+def flux(x, y, radius, image):
+    """
+    Perform circular aperture photometry with an annulus background.
+    x, y: arrays of centroid positions (floats)
+    radius: aperture radius in pixels
+    image: FITS filename
+    """
+    data = fits.getdata(image)
+
+    # Convert to Nx2 array of positions
+    positions = np.column_stack((x, y))
+
+    # Circular aperture
+    aperture = CircularAperture(positions, r=radius)
+
+    # Background annulus (3 px wide)
+    annulus = CircularAnnulus(positions, r_in=radius+3, r_out=radius+6)
+
+    # Perform photometry
+    aper_phot = aperture_photometry(data, aperture)
+    ann_phot = aperture_photometry(data, annulus)
+
+    # Compute background per pixel
+    bkg_mean = ann_phot['aperture_sum'] / annulus.area
+
+    # Subtract background from aperture flux
+    final_flux = aper_phot['aperture_sum'] - bkg_mean * aperture.area
+
+    # Replace negative flux with zero
+    final_flux = np.where(final_flux > 0, final_flux, 0)
+
+    return np.array(final_flux)
+
+
+def target_flux(x, y, radius, image):
+    """
+    Same as flux(), but for a single target star.
+    """
+    data = fits.getdata(image)
+
+    position = np.array([[x, y]])
+
+    aperture = CircularAperture(position, r=radius)
+    annulus = CircularAnnulus(position, r_in=radius+3, r_out=radius+6)
+
+    aper_phot = aperture_photometry(data, aperture)
+    ann_phot = aperture_photometry(data, annulus)
+
+    bkg_mean = ann_phot['aperture_sum'] / annulus.area
+    final_flux = aper_phot['aperture_sum'] - bkg_mean * aperture.area
+
+    return np.array([max(final_flux[0], 0)])
+
+
+def lsrl(x, y):
+    x = np.array(x)
+    y = np.array(y)
+
+    if np.std(x) < 1e-3 or np.std(y) < 1e-3:
+        raise ValueError("Not enough color variation for calibration.")
+
+    m, b = np.polyfit(x, y, 1)
+    sd = np.std(y - (m*x + b))
+    return m, b, sd
+
+
 
 def magnitudes(csv_file, green_image, red_image, n, RA, DEC):
     data = ascii.read(csv_file, format='csv')
@@ -457,12 +447,14 @@ def magnitudes(csv_file, green_image, red_image, n, RA, DEC):
     with fits.open(fits_file_path) as hdul:
         image_data = hdul[0].data
 
-    w_g = WCS(green_image)
-    w_r = WCS(red_image)
+    w_g = WCS("wcs_green_solution.fits") 
+    w_r = WCS("wcs_red_solution.fits")
+
 
     col_length = len(data['ra'])
     calibration_num = random.sample(range(0, col_length - 1), n)
     calibration_num = sorted(calibration_num)
+    print (f"Calibration numbers: {calibration_num}")
 
     ra_list = np.array([])
     dec_list = np.array([])
@@ -495,13 +487,8 @@ def magnitudes(csv_file, green_image, red_image, n, RA, DEC):
 
             j += 1
 
-    '''
-    x_pixel_g = x_pixel_g.astype(int)
-    y_pixel_g = y_pixel_g.astype(int)
-    x_pixel_r = x_pixel_r.astype(int)
-    y_pixel_r = y_pixel_r.astype(int)
-    '''
-   # === 1. Remove APASS stars outside the image ===
+
+    # === 1. Remove APASS stars outside the image ===
     ny, nx = image_data.shape
 
     inside = (
@@ -515,67 +502,48 @@ def magnitudes(csv_file, green_image, red_image, n, RA, DEC):
     y_pixel_r = y_pixel_r[inside]
     g = g[inside]
     r = r[inside]
-
     print("APASS stars inside image:", len(x_pixel_g))
 
 
-    # === 2. Detect stars in the green image ===
+    # ============================
+    #   GREEN IMAGE (MASTER BAND)
+    # ============================
+
+    # 2.a. Detect stars in the green image
     sources = detect_stars(green_image, threshold=3.0)
-    det_x = np.array(sources['xcentroid'])
-    det_y = np.array(sources['ycentroid'])
+    det_x_g = np.array(sources['xcentroid'])
+    det_y_g = np.array(sources['ycentroid'])
 
-    print("Detected stars:", len(det_x))
+    # 2.b. Match detected stars to APASS using GREEN WCS
+    matched = match_detected_to_apass(det_x_g, det_y_g, w_g, "apass_subset.csv")
 
-    # === 3. Convert detected centroids to RA/Dec ===
-    det_ra, det_dec = w_g.all_pix2world(det_x, det_y, 1)
-    det_coords = SkyCoord(det_ra * u.deg, det_dec * u.deg, frame="icrs")
+    # 2.c. Load APASS catalog
+    cat = pd.read_csv("apass_subset.csv")
 
-    # === 4. Build SkyCoord for APASS catalog ===
-    cat_ra = data['ra']
-    cat_dec = data['dec']
-    cat_coords = SkyCoord(cat_ra * u.deg, cat_dec * u.deg, frame="icrs")
+    # 2.d. Extract RA/Dec of the APASS stars that matched in GREEN
+    ra_match  = cat["ra"].values[matched["cat_index"]]
+    dec_match = cat["dec"].values[matched["cat_index"]]
 
-    # === 5. Match each detected star to nearest APASS star ===
-    idx, sep2d, _ = det_coords.match_to_catalog_sky(cat_coords)
+    # Pixel positions of these stars in the GREEN image
+    x_green = matched["det_x"]
+    y_green = matched["det_y"]
 
-    # VERY strict matching: only keep stars within 1 arcsec
-    max_sep = 4.5 * u.arcsec
-    good = sep2d < max_sep
+    # ============================
+    #        RED IMAGE
+    # ============================
 
-    print("Matched APASS stars:", np.sum(good))
-
-    # Keep only matched detections
-    matched_det_x = det_x[good]
-    matched_det_y = det_y[good]
-    matched_cat_ix = idx[good]
-
-    # Pull standard magnitudes from APASS
-    g = data['mag_g'][matched_cat_ix]
-    r = data['mag_r'][matched_cat_ix]
+    # 3. Project the SAME APASS stars into the RED image using RED WCS
+    x_red, y_red = w_r.all_world2pix(ra_match, dec_match, 1)
 
 
 
-    # === 5. Use detected centroids for flux extraction ===
-    x_flux = matched_det_x
-    y_flux = matched_det_y
-
-    # === 6. Filter out faint APASS stars (critical!) ===
-    bright = (g < 16.5)   # or 15.5 if you want even cleaner stars
-    x_flux = x_flux[bright]
-    y_flux = y_flux[bright]
-    g = g[bright]
-    r = r[bright]
-
-    print("Final calibration stars after brightness filter:", len(g))
-
-    
-    green_flux = flux(x_flux, y_flux, 8, green_image)
-    red_flux = flux(x_flux, y_flux, 8, red_image)
+        
+    green_flux = flux(x_green, y_green, 5, green_image)
+    red_flux = flux(x_red, y_red, 5, red_image)
 
 
     valid_flux_g = []
     valid_flux_r = []
-
 
     mask = (
     (green_flux > 0) &
@@ -586,14 +554,16 @@ def magnitudes(csv_file, green_image, red_image, n, RA, DEC):
 
     valid_flux_g = green_flux[mask]
     valid_flux_r = red_flux[mask]
-    g = g[mask]
-    r = r[mask]
-    
+    g = matched["g"][mask]
+    r = matched["r"][mask]
+
+
     valid_flux_g = np.array(valid_flux_g)
     valid_flux_r = np.array(valid_flux_r)
 
     inst_g = -2.5 * np.log10(valid_flux_g)
     inst_r = -2.5 * np.log10(valid_flux_r)
+
 
     #X1
     inst_g_r = inst_g - inst_r
@@ -610,50 +580,78 @@ def magnitudes(csv_file, green_image, red_image, n, RA, DEC):
     target_pixel_r_x, target_pixel_r_y = w_r.all_world2pix(RA, DEC, 1)
 
 
-    '''
-    target_pixel_g_x = target_pixel_g_x.astype(int)
-    target_pixel_g_y = target_pixel_g_y.astype(int)
-    target_pixel_r_x = target_pixel_r_x.astype(int)
-    target_pixel_r_y = target_pixel_r_y.astype(int)
-    '''
-    target_flux_g = target_flux(target_pixel_g_x, target_pixel_g_y, 9, green_image)
-    target_flux_r = target_flux(target_pixel_r_x, target_pixel_r_y, 9, red_image)
+
+
+    target_flux_g = target_flux(target_pixel_g_x, target_pixel_g_y, 8, green_image)
+    target_flux_r = target_flux(target_pixel_r_x, target_pixel_r_y, 8, red_image)
 
     target_g_inst_mag = -2.5 * np.log10(target_flux_g)
     target_r_inst_mag = -2.5 * np.log10(target_flux_r)
+
+    print("std(inst_g_r) =", np.std(inst_g_r))
+    print("std(st_g_r)   =", np.std(st_g_r))
+
 
     m1_b1 = lsrl(inst_g_r, st_g_r)
     m2_b2 = lsrl(st_g_r, g_offset)
 
     new_std = m1_b1[0]*(inst_g_r) + m1_b1[1]
     new_std_inst = m2_b2[0]*new_std + m2_b2[1] 
-    label_text = f'Tgr = {round(m1_b1[0], 4)} \n Cgr = {round(m1_b1[1], 4)}'
-    legend_entry = mlines.Line2D([], [], color='none', label=label_text)
+
+
     
     standard_g_r_target = m1_b1[0]*(target_g_inst_mag - target_r_inst_mag) + m1_b1[1]
     standard_g_target = m2_b2[0]*standard_g_r_target + m2_b2[1] + target_g_inst_mag
     
-    
-
 
 
     standard_r_target = standard_g_target - standard_g_r_target
 
     error_g, error_r = m1_b1[2], m2_b2[2]
+    Tgr = m1_b1[0]
+    Cgr = m1_b1[1]
+    Tg  = m2_b2[0]
+    Cg  = m2_b2[1]
+
+    
+    print("\n===== DEBUG OUTPUT =====")
+    print("Matched RA:", ra_match)
+    print("Matched DEC:", dec_match)
+    print("Green pixel coords (x, y):")
+    print(x_green, y_green)
+    print("Red pixel coords (x, y):")
+    print(x_red, y_red)
+    print("APASS g:", g)
+    print("APASS r:", r)
+    print("Green flux:", valid_flux_g)
+    print("Red flux:", valid_flux_r)
+    print("Instrumental g:", inst_g)
+    print("Instrumental r:", inst_r)
+    print("Instrumental (g-r):", inst_g_r)
+    print("Standard (g-r):", st_g_r)
+    print("Green offset:", g_offset)
+    print("Tgr, Cgr:", Tgr, Cgr)
+    print("Tg, Cg:", Tg, Cg)
+    print("Standard error (color term):", m1_b1[2])
+    print("Standard error (green offset):", m2_b2[2])
+    print("========================\n")
+
     
     return (
-    standard_g_target,
-    standard_r_target,
-    error_g,
-    error_r,
-    calibration_num,
-    m1_b1[0].item(), # Tgr
-    m1_b1[1].item(), # Cgr
-    m2_b2[0].item(), # Tg
-    m2_b2[1].item() # Cg
+        standard_g_target, 
+        standard_r_target, 
+        error_g, 
+        error_r, 
+        calibration_num, 
+        Tgr, 
+        Cgr,
+        Tg,
+        Cg
+        ) 
+
     
-)
- 
+
+
 
 
 
@@ -768,10 +766,10 @@ def object_calibration():
 
     # If user typed paths instead, use those
     elif g_text and r_text:
-        #full_calibration_with_subid(g_text, "wcs_green_solution.fits", os.environ.get("GREEN_SUBID"))
-        #num_rows = full_calibration_with_subid(r_text, "wcs_red_solution.fits", os.environ.get("RED_SUBID"))
-        full_calibration(g_text, "wcs_green_solution.fits")
-        num_rows = full_calibration(r_text, "wcs_red_solution.fits")
+        full_calibration_with_subid(g_text, "wcs_green_solution.fits", os.environ.get("GREEN_SUBID"))
+        num_rows = full_calibration_with_subid(r_text, "wcs_red_solution.fits", os.environ.get("RED_SUBID"))
+        #full_calibration(g_text, "wcs_green_solution.fits")
+        #num_rows = full_calibration(r_text, "wcs_red_solution.fits")
 
         standard_g_target, standard_r_target, error_g, error_r, calibration_num, Tgr, Cgr, Tg, Cg = magnitudes(
             "apass_subset.csv",
