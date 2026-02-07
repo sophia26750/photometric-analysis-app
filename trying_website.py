@@ -367,7 +367,14 @@ def full_calibration_with_subid(image, wcs_image_name, subid_key):
         status_message = f"Submission ID achieved...please wait for job ID"
 
     # 3. Wait for job to finish
-    job_id = wait_for_job(subid_key)
+    # 3. Wait for job to finish
+    try:
+        job_id = wait_for_job(subid_key)
+    except TimeoutError:
+        print("Timeout waiting for job.")
+        status_message = "Error: Astrometry.net did not return a job ID in time."
+        return None
+
     print("Job ID:", job_id)
     #status_message = f"Job ID: {job_id}"
     status_message = f"Job ID achieved...please wait for astrometry results"
@@ -634,7 +641,19 @@ def magnitudes(csv_file, green_image, red_image, n, RA, DEC):
 
     error_g, error_r = m1_b1[2], m2_b2[2]
     
-    return (standard_g_target, standard_r_target, error_g, error_r, calibration_num) 
+    return (
+    standard_g_target,
+    standard_r_target,
+    error_g,
+    error_r,
+    calibration_num,
+    m1_b1[0].item(), # Tgr
+    m1_b1[1].item(), # Cgr
+    m2_b2[0].item(), # Tg
+    m2_b2[1].item() # Cg
+    
+)
+ 
 
 
 
@@ -663,6 +682,10 @@ def object_calibration():
     standard_r_target = None 
     error_g = None 
     error_r = None
+    Tgr = None
+    Cgr = None
+    Tg = None
+    Cg = None
 
 
     ra_decimal = None
@@ -750,7 +773,7 @@ def object_calibration():
         full_calibration(g_text, "wcs_green_solution.fits")
         num_rows = full_calibration(r_text, "wcs_red_solution.fits")
 
-        standard_g_target, standard_r_target, error_g, error_r, calibration_num = magnitudes(
+        standard_g_target, standard_r_target, error_g, error_r, calibration_num, Tgr, Cgr, Tg, Cg = magnitudes(
             "apass_subset.csv",
             "wcs_green_solution.fits",
             "wcs_red_solution.fits",
@@ -767,6 +790,10 @@ def object_calibration():
         standard_r_target=standard_r_target,
         error_g=error_g,
         error_r=error_r,
+        Tgr=Tgr, 
+        Cgr=Cgr, 
+        Tg=Tg, 
+        Cg=Cg
     )
 
 
