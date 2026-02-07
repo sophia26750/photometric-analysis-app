@@ -75,11 +75,34 @@ def upload_fits_file(file_path, session_token, url="http://nova.astrometry.net/a
     return subid
 
 
+def safe_get_json(url):
+    """
+    Safely GET a URL and return JSON if possible.
+    If the response is not JSON, print an error and return None.
+    """
+    try:
+        resp = requests.get(url, timeout=10)
+    except Exception as e:
+        print(f"Network error while requesting {url}: {e}")
+        return None
+
+    try:
+        return resp.json()
+    except ValueError:
+        print(f"Astrometry.net returned non‑JSON response for {url}:")
+        print(resp.text[:500])  # print first 500 chars for debugging
+        return None
+
+
 def wait_for_job(sub_id, timeout=180):
 
     url = f"http://nova.astrometry.net/api/submissions/{sub_id}"
     for i in range(timeout):
-        r = requests.get(url).json()
+        r = safe_get_json(url)
+        if r is None:
+            print("Error: Could not retrieve submission status.")
+            return None
+
         jobs = r.get("jobs", [])
         if jobs and jobs[0] is not None:
             print("Job found:", jobs[0])
@@ -100,7 +123,11 @@ def wait_for_calibration(job_id, timeout=180):
     url = f"http://nova.astrometry.net/api/jobs/{job_id}/calibration/"
     
     for _ in range(timeout):
-        r = requests.get(url).json()
+        r = safe_get_json(url)
+        if r is None:
+            print("Error: Could not retrieve calibration status.")
+            return None
+
 
         # Calibration is ready
         if "ra" in r:
@@ -227,7 +254,49 @@ def full_calibration_with_subid(image, wcs_image_name, subid_key):
     # 6. Query APASS around the solved coordinates
     ra = astro_results["ra"]
     dec = astro_results["dec"]
-    radius = round(astro_results["radius"] * 0.8, 1)
+    radius = round(astro_results["radius"] * 0.6, 1)
+
+    num_rows = query_apass_to_csv(ra, dec, radius, "apass_subset.csv")
+    return num_rows
+
+
+def full_calibration(image, wcs_image_name, subid_key=None):
+
+    # 1. Login to Astrometry.net
+    api_key = os.environ.get("ASTRO_LOGIN")
+    session_key = login_to_astrometry(api_key)
+    print("Session:", session_key)
+    print(f"Session key achieved...please wait for submission ID")
+
+
+    # 2. Upload image if no subid_key provided
+    if subid_key is None:
+        subid_key = upload_fits_file(image, session_key)
+        print("Submission ID:", subid_key)
+        if subid_key is None:
+            print("ERROR: Astrometry.net upload failed — no submission ID returned.")
+            return None
+
+
+    else:
+        subid_key = subid_key
+        print("Submission ID:", subid_key)
+
+
+    job_id = wait_for_job(subid_key)
+    astro_results = wait_for_calibration(job_id)
+
+    w = apply_calibration_to_fits(
+        image,
+        wcs_image_name,
+        job_id=job_id
+    )
+
+
+    # 6. Query APASS around the solved coordinates
+    ra = astro_results["ra"]
+    dec = astro_results["dec"]
+    radius = round(astro_results["radius"] * 0.7, 1)
 
     num_rows = query_apass_to_csv(ra, dec, radius, "apass_subset.csv")
     return num_rows
@@ -352,7 +421,7 @@ def magnitudes(csv_file, green_image, red_image, n, RA, DEC):
 
 
     col_length = len(data['ra'])
-    calibration_num = random.sample(range(0, col_length - 1), 10) #col_length - 1), n)
+    calibration_num = random.sample(range(0, col_length - 1), n)
     calibration_num = sorted(calibration_num)
     print (f"Calibration numbers: {calibration_num}")
 
@@ -370,16 +439,240 @@ def magnitudes(csv_file, green_image, red_image, n, RA, DEC):
 
     j = 0
 
+    for i in range(col_length):
+        if j < len(calibration_num) and i == calibration_num[j]:
+            ra = data['ra'][i]
+            dec = data['dec'][i]
+            x_g, y_g = w_g.all_world2pix(ra, dec, 1)
+            x_r, y_r = w_r.all_world2pix(ra, dec, 1)
+            ra_list = np.append(ra_list, ra)
+            dec_list = np.append(dec_list, dec)
+            x_pixel_g = np.append(x_pixel_g, x_g)
+            y_pixel_g = np.append(y_pixel_g, y_g)
+            x_pixel_r = np.append(x_pixel_r, x_r)
+            y_pixel_r = np.append(y_pixel_r, y_r)
+            g = np.append(g, data['mag_g'][i])
+            r = np.append(r, data['mag_r'][i])
+
+            j += 1
+
+    # === Visualize RED WCS solution ===
+    hdul_r = fits.open(red_image)
+    image_data_r = hdul_r[0].data
+    vmin_r, vmax_r = np.percentile(image_data_r, [5, 99])
+
+    fig = plt.figure(figsize=(10,8))
+    ax = plt.subplot(projection=w_r)
+    ax.imshow(image_data_r, cmap="gray", origin="lower", vmin=vmin_r, vmax=vmax_r)
+
+    # plot APASS stars (red band)
+    ax.scatter(x_pixel_r, y_pixel_r, s=80, edgecolor='cyan', facecolor='none', linewidth=1.5)
+
+    plt.title("RED WCS Check: APASS stars projected onto image")
+    plt.xlabel("RA")
+    plt.ylabel("Dec")
+    plt.show()
+
+            
+    vmin, vmax = np.percentile(image_data, [5, 99])
+    fig = plt.figure(figsize=(10,8))
+    ax = plt.subplot(projection=w_g)
+    ax.imshow(image_data, cmap="gray", origin="lower", vmin=vmin, vmax=vmax)
+
+    # plot APASS stars
+    ax.scatter(x_pixel_g, y_pixel_g, s=50, edgecolor='red', facecolor='none')
+
+    plt.show()
+
+
+    # === 1. Remove APASS stars outside the image ===
+    ny, nx = image_data.shape
+
+    inside = (
+        (x_pixel_g >= 0) & (x_pixel_g < nx) &
+        (y_pixel_g >= 0) & (y_pixel_g < ny)
+    )
+
+    x_pixel_g = x_pixel_g[inside]
+    y_pixel_g = y_pixel_g[inside]
+    x_pixel_r = x_pixel_r[inside]
+    y_pixel_r = y_pixel_r[inside]
+    g = g[inside]
+    r = r[inside]
+    print("APASS stars inside image:", len(x_pixel_g))
+
+
+    # ============================
+    #   GREEN IMAGE (MASTER BAND)
+    # ============================
+
+    # 2.a. Detect stars in the green image
+    sources = detect_stars(green_image, threshold=3.0)
+    det_x_g = np.array(sources['xcentroid'])
+    det_y_g = np.array(sources['ycentroid'])
+
+    # 2.b. Match detected stars to APASS using GREEN WCS
+    matched = match_detected_to_apass(det_x_g, det_y_g, w_g, "apass_subset.csv")
+
+    # 2.c. Load APASS catalog
+    cat = pd.read_csv("apass_subset.csv")
+
+    # 2.d. Extract RA/Dec of the APASS stars that matched in GREEN
+    ra_match  = cat["ra"].values[matched["cat_index"]]
+    dec_match = cat["dec"].values[matched["cat_index"]]
+
+    # Pixel positions of these stars in the GREEN image
+    x_green = matched["det_x"]
+    y_green = matched["det_y"]
+
+    # ============================
+    #        RED IMAGE
+    # ============================
+
+    # 3. Project the SAME APASS stars into the RED image using RED WCS
+    x_red, y_red = w_r.all_world2pix(ra_match, dec_match, 1)
+
+
+
+        
+    green_flux = flux(x_green, y_green, 5, green_image)
+    red_flux = flux(x_red, y_red, 5, red_image)
+
+
+    valid_flux_g = []
+    valid_flux_r = []
+
+    mask = (
+    (green_flux > 0) &
+    np.isfinite(green_flux) &
+    (red_flux > 0) &
+    np.isfinite(red_flux)
+    )   
+
+    valid_flux_g = green_flux[mask]
+    valid_flux_r = red_flux[mask]
+    g = matched["g"][mask]
+    r = matched["r"][mask]
+
+
+    valid_flux_g = np.array(valid_flux_g)
+    valid_flux_r = np.array(valid_flux_r)
+
+    inst_g = -2.5 * np.log10(valid_flux_g)
+    inst_r = -2.5 * np.log10(valid_flux_r)
+
+
+    #X1
+    inst_g_r = inst_g - inst_r
+    
+    # Y1 & X2
+    st_g_r = g - r
+    
+    # Y2
+    g_offset = g - inst_g
+
+    ##Specifically solving for the target object now.
+
+    target_pixel_g_x, target_pixel_g_y = w_g.all_world2pix(RA, DEC, 1)
+    target_pixel_r_x, target_pixel_r_y = w_r.all_world2pix(RA, DEC, 1)
+
+
+
+
+    target_flux_g = target_flux(target_pixel_g_x, target_pixel_g_y, 8, green_image)
+    target_flux_r = target_flux(target_pixel_r_x, target_pixel_r_y, 8, red_image)
+
+    target_g_inst_mag = -2.5 * np.log10(target_flux_g)
+    target_r_inst_mag = -2.5 * np.log10(target_flux_r)
+
+    print("std(inst_g_r) =", np.std(inst_g_r))
+    print("std(st_g_r)   =", np.std(st_g_r))
+
+
+    m1_b1 = lsrl(inst_g_r, st_g_r)
+    m2_b2 = lsrl(st_g_r, g_offset)
+
+    new_std = m1_b1[0]*(inst_g_r) + m1_b1[1]
+    new_std_inst = m2_b2[0]*new_std + m2_b2[1] 
+    label_text = f'Tgr = {round(m1_b1[0], 4)} \n Cgr = {round(m1_b1[1], 4)}'
+
+    legend_entry = mlines.Line2D([], [], color='none', label=label_text)
+
+    plt.plot(inst_g_r, new_std, label=f'Tgr = {round(m1_b1[0], 4)} \n Cgr = {round(m1_b1[1], 4)}')
+    plt.scatter(inst_g_r, st_g_r)
+    plt.xlabel('Instrumental (g-r)')       
+    plt.ylabel('Standard (g-r)')       
+    plt.title('Instrumental Color Index vs. Standard Color Index for July 31')
+    plt.legend()
+    plt.show()
+    
+    
+    print(m1_b1[0], m1_b1[1], m2_b2[0], m2_b2[1])
+    plt.plot(new_std, new_std_inst, label=f"Tg = {round(m2_b2[0], 4)}")
+    plt.scatter(new_std, g_offset)
+    plt.xlabel('Standard (g-r)')       
+    plt.ylabel('Offset')       
+    plt.title('Standard Color Index vs. Green Offset for July 31')
+    plt.legend()
+    plt.show()
+    
+    standard_g_r_target = m1_b1[0]*(target_g_inst_mag - target_r_inst_mag) + m1_b1[1]
+    standard_g_target = m2_b2[0]*standard_g_r_target + m2_b2[1] + target_g_inst_mag
     
 
 
+    standard_r_target = standard_g_target - standard_g_r_target
+
+    error_g, error_r = m1_b1[2], m2_b2[2]
+    Tgr = m1_b1[0]
+    Cgr = m1_b1[1]
+    Tg  = m2_b2[0]
+    Cg  = m2_b2[1]
+
+    
+    print("\n===== DEBUG OUTPUT =====")
+    print("Matched RA:", ra_match)
+    print("Matched DEC:", dec_match)
+    print("Green pixel coords (x, y):")
+    print(x_green, y_green)
+    print("Red pixel coords (x, y):")
+    print(x_red, y_red)
+    print("APASS g:", g)
+    print("APASS r:", r)
+    print("Green flux:", valid_flux_g)
+    print("Red flux:", valid_flux_r)
+    print("Instrumental g:", inst_g)
+    print("Instrumental r:", inst_r)
+    print("Instrumental (g-r):", inst_g_r)
+    print("Standard (g-r):", st_g_r)
+    print("Green offset:", g_offset)
+    print("Tgr, Cgr:", Tgr, Cgr)
+    print("Tg, Cg:", Tg, Cg)
+    print("Standard error (color term):", m1_b1[2])
+    print("Standard error (green offset):", m2_b2[2])
+    print("========================\n")
+
+    
+    return (
+        standard_g_target, 
+        standard_r_target, 
+        error_g, 
+        error_r, 
+        calibration_num, 
+        Tgr, 
+        Cgr,
+        Tg,
+        Cg
+        ) 
 
 
-
-full_calibration_with_subid("/Users/admin/source/yspa-research-code/fits_files/r_july13-t24-mvn-green_stacked.fits", "wcs_green_solution.fits", os.environ.get("GREEN_SUBID")) # "/Users/admin/source/yspa-research-code/fits_files/r_july15-home40-mvn-green-all_stacked.fits"
-num_rows = full_calibration_with_subid("/Users/admin/source/yspa-research-code/fits_files/r_july13-t24-mvn-red_stacked.fits", "wcs_red_solution.fits", )  #/Users/admin/source/yspa-research-code/fits_files/r_july15-home40-mvn-red-all_stacked.fits"
+#full_calibration_with_subid("/Users/admin/source/yspa-research-code/fits_files/r_july13-t24-mvn-green_stacked.fits", "wcs_green_solution.fits", os.environ.get("GREEN_SUBID")) # "/Users/admin/source/yspa-research-code/fits_files/r_july15-home40-mvn-green-all_stacked.fits"
+#num_rows = full_calibration_with_subid("/Users/admin/source/yspa-research-code/fits_files/r_july13-t24-mvn-red_stacked.fits", "wcs_red_solution.fits", )  #/Users/admin/source/yspa-research-code/fits_files/r_july15-home40-mvn-red-all_stacked.fits"
 #full_calibration("/Users/admin/source/yspa-research-code/fits_files/r_july13-t24-mvn-green_stacked.fits", "wcs_green_solution.fits") 
 #num_rows = full_calibration("/Users/admin/source/yspa-research-code/fits_files/r_july13-t24-mvn-red_stacked.fits", "wcs_red_solution.fits")
+
+full_calibration("/Users/admin/source/yspa-research-code/fits_files/t24-jul31-green.fits", "wcs_green_solution.fits") 
+num_rows = full_calibration("/Users/admin/source/yspa-research-code/fits_files/jul31-t24-red.fits", "wcs_red_solution.fits")
 
 print(magnitudes(
     "apass_subset.csv",
@@ -389,12 +682,6 @@ print(magnitudes(
     198.49989,
     36.439874
 ))
-
-
-
-
-
-
 
 
 
