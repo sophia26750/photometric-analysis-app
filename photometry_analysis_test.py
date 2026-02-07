@@ -17,15 +17,6 @@ from astropy.table import Table
 from astropy.io import ascii
 import astropy.units as u
 
-import tempfile
-from astropy.io import fits
-from astropy.wcs import WCS
-import requests
-from astropy.io import fits
-from astropy.io.fits import Header
-
-
-
 from photutils.aperture import CircularAperture, CircularAnnulus, aperture_photometry
 from astropy.stats import SigmaClip
 from photutils.background import Background2D, MedianBackground
@@ -40,19 +31,6 @@ import pandas as pd
 
 from photutils.detection import DAOStarFinder
 
-
-def lsrl(x, y):
-    x = np.array(x)
-    y = np.array(y)
-
-    if np.std(x) < 1e-3 or np.std(y) < 1e-3:
-        raise ValueError("Not enough color variation for calibration.")
-
-    m, b = np.polyfit(x, y, 1)
-    sd = np.std(y - (m*x + b))
-    return m, b, sd
-
-
 def login_to_astrometry(api_key: str) -> str:
 	url = 'http://nova.astrometry.net/api/login'
 	payload = {'request-json': json.dumps({"apikey": api_key})}
@@ -62,6 +40,7 @@ def login_to_astrometry(api_key: str) -> str:
 	except Exception:
 		session_key = None
 	return session_key
+
 
 def upload_fits_file(file_path, session_token, url="http://nova.astrometry.net/api/upload"):
 
@@ -95,6 +74,7 @@ def upload_fits_file(file_path, session_token, url="http://nova.astrometry.net/a
         subid = None
     return subid
 
+
 def wait_for_job(sub_id, timeout=180):
 
     url = f"http://nova.astrometry.net/api/submissions/{sub_id}"
@@ -114,38 +94,6 @@ def wait_for_job(sub_id, timeout=180):
 
         time.sleep(2)
     raise TimeoutError("Job did not appear in time.")
-         
-
-def query_apass_to_csv(ra_center, dec_center, radius_deg, output_csv="apass_subset.csv"):
-
-    """
-    Query APASS DR10 catalog using GAVO TAP and save results to a CSV file.
-    Args:
-        ra_center (float): Right Ascension of center (degrees)
-        dec_center (float): Declination of center (degrees)
-        radius_deg (float): Search radius (degrees)
-        output_csv (str): Output CSV filename
-    """
-    service = pyvo.dal.TAPService("https://dc.g-vo.org/tap")
-    query = f"""
-    SELECT * 
-    FROM apass.dr10
-    WHERE 1 = CONTAINS(
-        POINT('ICRS', ra, dec),
-        CIRCLE('ICRS', {ra_center}, {dec_center}, {radius_deg})
-    )
-    """
-    result = service.search(query)
-    df = result.to_table().to_pandas()
-    df = df.dropna(subset=["ra", "dec", "mag_g", "mag_r"])
-    df.to_csv(output_csv, index=False)
-    print(f"Saved {output_csv}")
-    print(f"Saved csv file as {output_csv}...")
-    num_rows = len(df)
-    print(f"Done!")
-
-    return num_rows - 2
-
 
 
 def wait_for_calibration(job_id, timeout=180):
@@ -161,10 +109,6 @@ def wait_for_calibration(job_id, timeout=180):
         time.sleep(2)
 
     return None
-
-
-
-
 
 
 
@@ -221,26 +165,110 @@ def apply_calibration_to_fits(input_fits, output_fits, job_id):
     return wcs
 
 
+def query_apass_to_csv(ra_center, dec_center, radius_deg, output_csv="apass_subset.csv"):
+
+    """
+    Query APASS DR10 catalog using GAVO TAP and save results to a CSV file.
+    Args:
+        ra_center (float): Right Ascension of center (degrees)
+        dec_center (float): Declination of center (degrees)
+        radius_deg (float): Search radius (degrees)
+        output_csv (str): Output CSV filename
+    """
+    service = pyvo.dal.TAPService("https://dc.g-vo.org/tap")
+    query = f"""
+    SELECT * 
+    FROM apass.dr10
+    WHERE 1 = CONTAINS(
+        POINT('ICRS', ra, dec),
+        CIRCLE('ICRS', {ra_center}, {dec_center}, {radius_deg})
+    )
+    """
+    result = service.search(query)
+    df = result.to_table().to_pandas()
+    df = df.dropna(subset=["ra", "dec", "mag_g", "mag_r"])
+    df.to_csv(output_csv, index=False)
+    print(f"Saved {output_csv}")
+    print(f"Saved csv file as {output_csv}...")
+    num_rows = len(df)
+    print(f"Done!")
+
+    return num_rows - 2
+
+def full_calibration_with_subid(image, wcs_image_name, subid_key):
+
+    # 1. Login to Astrometry.net
+    api_key = os.environ.get("ASTRO_LOGIN")
+    session_key = login_to_astrometry(api_key)
+    print("Session:", session_key)
+    print(f"Session key achieved...please wait for submission ID")
 
 
-def target_flux(x, y, radius, image):
-    """
-    Same as flux(), but for a single target star.
-    """
+    # 2. Upload image if no subid_key provided
+    if subid_key is None:
+        subid_key = upload_fits_file(image, session_key)
+        print("Submission ID:", subid_key)
+
+    else:
+        subid_key = subid_key
+        print("Submission ID:", subid_key)
+
+
+    job_id = wait_for_job(subid_key)
+    astro_results = wait_for_calibration(job_id)
+
+    w = apply_calibration_to_fits(
+        image,
+        wcs_image_name,
+        job_id=job_id
+    )
+
+
+    # 6. Query APASS around the solved coordinates
+    ra = astro_results["ra"]
+    dec = astro_results["dec"]
+    radius = round(astro_results["radius"] * 0.8, 1)
+
+    num_rows = query_apass_to_csv(ra, dec, radius, "apass_subset.csv")
+    return num_rows
+
+def detect_stars(image, fwhm=3.0, sigma=3.0, threshold=5.0):
     data = fits.getdata(image)
+    mean, median, std = sigma_clipped_stats(data, sigma=sigma)
+    daofind = DAOStarFinder(fwhm=fwhm, threshold=threshold * std)
+    sources = daofind(data - median)
+    return sources
 
-    position = np.array([[x, y]])
 
-    aperture = CircularAperture(position, r=radius)
-    annulus = CircularAnnulus(position, r_in=radius+3, r_out=radius+6)
 
-    aper_phot = aperture_photometry(data, aperture)
-    ann_phot = aperture_photometry(data, annulus)
+def match_detected_to_apass(det_x, det_y, wcs, apass_csv, max_arcsec=1.2):
 
-    bkg_mean = ann_phot['aperture_sum'] / annulus.area
-    final_flux = aper_phot['aperture_sum'] - bkg_mean * aperture.area
+    # Convert detections to RA/Dec
+    det_ra, det_dec = wcs.all_pix2world(det_x, det_y, 1)
+    det_coords = SkyCoord(det_ra*u.deg, det_dec*u.deg)
 
-    return np.array([max(final_flux[0], 0)])
+    # Load APASS
+    cat = pd.read_csv(apass_csv)
+    cat_coords = SkyCoord(cat["ra"].values*u.deg,
+                          cat["dec"].values*u.deg)
+
+    # Match
+    idx, sep2d, _ = det_coords.match_to_catalog_sky(cat_coords)
+
+    # Keep only very close matches
+    good = sep2d < (max_arcsec * u.arcsec)
+
+    matched = {
+        "det_x": det_x[good],
+        "det_y": det_y[good],
+        "cat_index": idx[good],
+        "sep_arcsec": sep2d[good].arcsec,
+        "g": cat["mag_g"].values[idx[good]],
+        "r": cat["mag_r"].values[idx[good]]
+    }
+
+    return matched
+
 
 
 def flux(x, y, radius, image):
@@ -276,58 +304,37 @@ def flux(x, y, radius, image):
 
     return np.array(final_flux)
 
-def detect_stars(image, fwhm=3.0, sigma=3.0, threshold=5.0):
+def target_flux(x, y, radius, image):
+    """
+    Same as flux(), but for a single target star.
+    """
     data = fits.getdata(image)
-    mean, median, std = sigma_clipped_stats(data, sigma=sigma)
-    daofind = DAOStarFinder(fwhm=fwhm, threshold=threshold * std)
-    sources = daofind(data - median)
-    return sources
 
-def show_star(image_data, x, y, size=20):
-    """
-    Display a zoomed-in cutout around a detected star.
-    x, y: centroid coordinates (floats)
-    size: half-width of the cutout in pixels
-    """
-    x = int(x)
-    y = int(y)
+    position = np.array([[x, y]])
 
-    cutout = image_data[y-size:y+size, x-size:x+size]
+    aperture = CircularAperture(position, r=radius)
+    annulus = CircularAnnulus(position, r_in=radius+3, r_out=radius+6)
 
-    plt.figure(figsize=(5,5))
-    plt.imshow(cutout, cmap='gray', origin='lower')
-    plt.colorbar(label="Pixel value")
-    plt.title(f"Star at ({x}, {y})")
-    plt.show()
+    aper_phot = aperture_photometry(data, aperture)
+    ann_phot = aperture_photometry(data, annulus)
 
-def match_detected_to_apass(det_x, det_y, wcs, apass_csv, max_arcsec=1.2):
+    bkg_mean = ann_phot['aperture_sum'] / annulus.area
+    final_flux = aper_phot['aperture_sum'] - bkg_mean * aperture.area
 
-    # Convert detections to RA/Dec
-    det_ra, det_dec = wcs.all_pix2world(det_x, det_y, 1)
-    det_coords = SkyCoord(det_ra*u.deg, det_dec*u.deg)
+    return np.array([max(final_flux[0], 0)])
 
-    # Load APASS
-    cat = pd.read_csv(apass_csv)
-    cat_coords = SkyCoord(cat["ra"].values*u.deg,
-                          cat["dec"].values*u.deg)
 
-    # Match
-    idx, sep2d, _ = det_coords.match_to_catalog_sky(cat_coords)
 
-    # Keep only very close matches
-    good = sep2d < (max_arcsec * u.arcsec)
+def lsrl(x, y):
+    x = np.array(x)
+    y = np.array(y)
 
-    matched = {
-        "det_x": det_x[good],
-        "det_y": det_y[good],
-        "cat_index": idx[good],
-        "sep_arcsec": sep2d[good].arcsec,
-        "g": cat["mag_g"].values[idx[good]],
-        "r": cat["mag_r"].values[idx[good]]
-    }
+    if np.std(x) < 1e-3 or np.std(y) < 1e-3:
+        raise ValueError("Not enough color variation for calibration.")
 
-    return matched
-
+    m, b = np.polyfit(x, y, 1)
+    sd = np.std(y - (m*x + b))
+    return m, b, sd
 
 def magnitudes(csv_file, green_image, red_image, n, RA, DEC):
     data = ascii.read(csv_file, format='csv')
@@ -345,8 +352,9 @@ def magnitudes(csv_file, green_image, red_image, n, RA, DEC):
 
 
     col_length = len(data['ra'])
-    calibration_num = random.sample(range(0, col_length - 1), n)
+    calibration_num = random.sample(range(0, col_length - 1), 10) #col_length - 1), n)
     calibration_num = sorted(calibration_num)
+    print (f"Calibration numbers: {calibration_num}")
 
     ra_list = np.array([])
     dec_list = np.array([])
@@ -362,279 +370,8 @@ def magnitudes(csv_file, green_image, red_image, n, RA, DEC):
 
     j = 0
 
-    for i in range(col_length):
-        if j < len(calibration_num) and i == calibration_num[j]:
-            ra = data['ra'][i]
-            dec = data['dec'][i]
-            x_g, y_g = w_g.all_world2pix(ra, dec, 1)
-            x_r, y_r = w_r.all_world2pix(ra, dec, 1)
-            ra_list = np.append(ra_list, ra)
-            dec_list = np.append(dec_list, dec)
-            x_pixel_g = np.append(x_pixel_g, x_g)
-            y_pixel_g = np.append(y_pixel_g, y_g)
-            x_pixel_r = np.append(x_pixel_r, x_r)
-            y_pixel_r = np.append(y_pixel_r, y_r)
-            g = np.append(g, data['mag_g'][i])
-            r = np.append(r, data['mag_r'][i])
-
-            j += 1
-
-    # === Visualize RED WCS solution ===
-    hdul_r = fits.open(red_image)
-    image_data_r = hdul_r[0].data
-    vmin_r, vmax_r = np.percentile(image_data_r, [5, 99])
-
-    fig = plt.figure(figsize=(10,8))
-    ax = plt.subplot(projection=w_r)
-    ax.imshow(image_data_r, cmap="gray", origin="lower", vmin=vmin_r, vmax=vmax_r)
-
-    # plot APASS stars (red band)
-    ax.scatter(x_pixel_r, y_pixel_r, s=80, edgecolor='cyan', facecolor='none', linewidth=1.5)
-
-    plt.title("RED WCS Check: APASS stars projected onto image")
-    plt.xlabel("RA")
-    plt.ylabel("Dec")
-    plt.show()
-
-            
-    vmin, vmax = np.percentile(image_data, [5, 99])
-    fig = plt.figure(figsize=(10,8))
-    ax = plt.subplot(projection=w_g)
-    ax.imshow(image_data, cmap="gray", origin="lower", vmin=vmin, vmax=vmax)
-
-    # plot APASS stars
-    ax.scatter(x_pixel_g, y_pixel_g, s=50, edgecolor='red', facecolor='none')
-
-    plt.show()
-    '''
-    x_pixel_g = x_pixel_g.astype(int)
-    y_pixel_g = y_pixel_g.astype(int)
-    x_pixel_r = x_pixel_r.astype(int)
-    y_pixel_r = y_pixel_r.astype(int)
-    '''
-   # === 1. Remove APASS stars outside the image ===
-    ny, nx = image_data.shape
-
-    inside = (
-        (x_pixel_g >= 0) & (x_pixel_g < nx) &
-        (y_pixel_g >= 0) & (y_pixel_g < ny)
-    )
-
-    x_pixel_g = x_pixel_g[inside]
-    y_pixel_g = y_pixel_g[inside]
-    x_pixel_r = x_pixel_r[inside]
-    y_pixel_r = y_pixel_r[inside]
-    g = g[inside]
-    r = r[inside]
-
-    print("APASS stars inside image:", len(x_pixel_g))
-
-
-    # === 2. Detect stars in the green image ===
-    sources = detect_stars(green_image, threshold=3.0)
-    det_x = np.array(sources['xcentroid'])
-    det_y = np.array(sources['ycentroid'])
-
-    print("Detected stars:", len(det_x))
-
-    # === 3. Match detected stars to APASS ===
-    matched = match_detected_to_apass(det_x, det_y, w_g, csv_file, max_arcsec=1.2)
-
-    print("Matched APASS stars:", len(matched["det_x"]))
-
-    # Extract matched data
-    x_flux = matched["det_x"]
-    y_flux = matched["det_y"]
-    g = matched["g"]
-    r = matched["r"]
-
-    # === 4. Brightness filter ===
-    bright = (g < 18.0)
-
-    x_flux = x_flux[bright]
-    y_flux = y_flux[bright]
-    g = g[bright]
-    r = r[bright]
-
-    print("Final calibration stars after brightness filter:", len(g))
-
-    
-    green_flux = flux(x_flux, y_flux, 5, green_image)
-    red_flux = flux(x_flux, y_flux, 5, red_image)
-
-
-    valid_flux_g = []
-    valid_flux_r = []
-
-
-    # mask = (
-    # (green_flux > 0) &
-    # np.isfinite(green_flux) &
-    # (red_flux > 0) &
-    # np.isfinite(red_flux)
-    # )   
-
-    # valid_flux_g = green_flux[mask]
-    # valid_flux_r = red_flux[mask]
-    # g = g[mask]
-    # r = r[mask]
-    
-    valid_flux_g = np.array(valid_flux_g)
-    valid_flux_r = np.array(valid_flux_r)
-
-    inst_g = -2.5 * np.log10(valid_flux_g)
-    inst_r = -2.5 * np.log10(valid_flux_r)
-
-    #X1
-    inst_g_r = inst_g - inst_r
-    
-    # Y1 & X2
-    st_g_r = g - r
-    
-    # Y2
-    g_offset = g - inst_g
-
-    ##Specifically solving for the target object now.
-
-    target_pixel_g_x, target_pixel_g_y = w_g.all_world2pix(RA, DEC, 1)
-    target_pixel_r_x, target_pixel_r_y = w_r.all_world2pix(RA, DEC, 1)
-
-
-    '''
-    target_pixel_g_x = target_pixel_g_x.astype(int)
-    target_pixel_g_y = target_pixel_g_y.astype(int)
-    target_pixel_r_x = target_pixel_r_x.astype(int)
-    target_pixel_r_y = target_pixel_r_y.astype(int)
-    '''
-    target_flux_g = target_flux(target_pixel_g_x, target_pixel_g_y, 8, green_image)
-    target_flux_r = target_flux(target_pixel_r_x, target_pixel_r_y, 8, red_image)
-
-    target_g_inst_mag = -2.5 * np.log10(target_flux_g)
-    target_r_inst_mag = -2.5 * np.log10(target_flux_r)
-
-    print("std(inst_g_r) =", np.std(inst_g_r))
-    print("std(st_g_r)   =", np.std(st_g_r))
-
-
-    m1_b1 = lsrl(inst_g_r, st_g_r)
-    m2_b2 = lsrl(st_g_r, g_offset)
-
-    new_std = m1_b1[0]*(inst_g_r) + m1_b1[1]
-    new_std_inst = m2_b2[0]*new_std + m2_b2[1] 
-    label_text = f'Tgr = {round(m1_b1[0][0], 4)} \n Cgr = {round(m1_b1[1][0], 4)}'
-    legend_entry = mlines.Line2D([], [], color='none', label=label_text)
-
-    plt.plot(inst_g_r, new_std, label=f'Tgr = {round(m1_b1[0][0], 4)} \n Cgr = {round(m1_b1[1][0], 4)}')
-    plt.scatter(inst_g_r, st_g_r)
-    plt.xlabel('Instrumental (g-r)')       
-    plt.ylabel('Standard (g-r)')       
-    plt.title('Instrumental Color Index vs. Standard Color Index for July 31')
-    plt.legend()
-    plt.show()
-    
-    
-    print(m1_b1[0], m1_b1[1], m2_b2[0], m2_b2[1])
-    plt.plot(new_std, new_std_inst, label=f"Tg = {round(m2_b2[0][0], 4)}")
-    plt.scatter(new_std, g_offset)
-    plt.xlabel('Standard (g-r)')       
-    plt.ylabel('Offset')       
-    plt.title('Standard Color Index vs. Green Offset for July 31')
-    plt.legend()
-    plt.show()
-    
-    standard_g_r_target = m1_b1[0]*(target_g_inst_mag - target_r_inst_mag) + m1_b1[1]
-    standard_g_target = m2_b2[0]*standard_g_r_target + m2_b2[1] + target_g_inst_mag
-    
     
 
-
-
-    standard_r_target = standard_g_target - standard_g_r_target
-
-    error_g, error_r = m1_b1[2], m2_b2[2]
-    
-    print(error_g, error_r)
-    
-    return (standard_g_target, standard_r_target, error_g, error_r, calibration_num) 
-
-
-def full_calibration_with_subid(image, wcs_image_name, subid_key):
-
-    # 1. Login to Astrometry.net
-    api_key = os.environ.get("ASTRO_LOGIN")
-    session_key = login_to_astrometry(api_key)
-    print("Session:", session_key)
-
-    
-
-    print(f"Session key achieved...please wait for submission ID")
-
-
-    # 2. Upload image if no subid_key provided
-    if subid_key is None:
-        subid_key = upload_fits_file(image, session_key)
-        print("Submission ID:", subid_key)
-
-    else:
-        subid_key = subid_key
-        print("Submission ID:", subid_key)
-
-
-    job_id = wait_for_job(subid_key)
-    astro_results = wait_for_calibration(job_id)
-
-    w = apply_calibration_to_fits(
-        image,
-        wcs_image_name,
-        job_id=job_id
-    )
-
-
-    # 6. Query APASS around the solved coordinates
-    ra = astro_results["ra"]
-    dec = astro_results["dec"]
-    radius = round(astro_results["radius"] * 0.6, 1)
-
-    num_rows = query_apass_to_csv(ra, dec, radius, "apass_subset.csv")
-    return num_rows
-
-def full_calibration(image, wcs_image_name):
-
-
-    # 1. Login to Astrometry.net
-    api_key = os.environ.get("ASTRO_LOGIN")
-    session_key = login_to_astrometry(api_key)
-    print("Session:", session_key)
-
-   
-    # 2. Upload image if no subid_key provided
-    subid_key = upload_fits_file(image, session_key)
-    print("Submission ID:", subid_key)
-
-
-
-    # 3. Wait for job to finish
-    job_id = wait_for_job(subid_key)
-    print("Job ID:", job_id)
-
-
-
-    # 4. Retrieve calibration results
-    astro_results = wait_for_calibration(job_id)
-    print("Astrometry Results:", astro_results)
-
-
-    # 5. Apply WCS to the green image
-    image = apply_calibration_to_fits(image, wcs_image_name, astro_results)
-
-    # 6. Query APASS around the solved coordinates
-    ra = astro_results["ra"]
-    dec = astro_results["dec"]
-    radius = round(astro_results["radius"] * 0.6, 1)
-
-    num_rows = query_apass_to_csv(ra, dec, radius, "apass_subset.csv")
-    return num_rows
-    
 
 
 

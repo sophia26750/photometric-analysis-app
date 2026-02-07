@@ -627,7 +627,7 @@ def magnitudes(csv_file, green_image, red_image, n, RA, DEC):
 
     new_std = m1_b1[0]*(inst_g_r) + m1_b1[1]
     new_std_inst = m2_b2[0]*new_std + m2_b2[1] 
-    label_text = f'Tgr = {round(m1_b1[0][0], 4)} \n Cgr = {round(m1_b1[1][0], 4)}'
+    label_text = f'Tgr = {round(m1_b1[0], 4)} \n Cgr = {round(m1_b1[1], 4)}'
     legend_entry = mlines.Line2D([], [], color='none', label=label_text)
     
     standard_g_r_target = m1_b1[0]*(target_g_inst_mag - target_r_inst_mag) + m1_b1[1]
