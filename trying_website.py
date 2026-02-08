@@ -796,6 +796,141 @@ def object_calibration():
 
 
 
+@app.route("/object_calibration", methods=["GET", "POST"])
+def star_cluster_calibration():
+    user_text = None
+    g_text = None
+    r_text = None
+    g_file = None
+    r_file = None
+    g_path = None 
+    r_path = None
+
+    error_g = None 
+    error_r = None
+    Tgr = None
+    Cgr = None
+    Tg = None
+    Cg = None
+
+
+    ra_decimal = None
+    dec_decimal = None
+    ra_hms = None
+    dec_dms = None
+
+    upload_folder = "uploads" 
+    os.makedirs(upload_folder, exist_ok=True)
+
+    if request.method == "POST":
+        # Single input case
+        user_text = request.form.get("calibration_input")
+
+        
+
+        # Both-input case
+        g_text = request.form.get("g_link_both")
+        r_text = request.form.get("r_link_both")
+
+        g_file = request.files.get("g_file")
+        r_file = request.files.get("r_file")
+
+        ra_decimal = request.form.get("ra_decimal")
+        dec_decimal = request.form.get("dec_decimal")
+        ra_hms = request.form.get("ra_hms")
+        dec_dms = request.form.get("dec_dms")
+
+        # Option A: decimal degrees
+        if ra_decimal and dec_decimal:
+            try:
+                ra_deg = float(ra_decimal)
+                dec_deg = float(dec_decimal)
+            except ValueError:
+                pass
+
+        # Option B: HMS/DMS
+        elif ra_hms and dec_dms:
+            try:
+                coord = SkyCoord(ra_hms, dec_dms, unit=(u.hourangle, u.deg))
+                ra_deg = coord.ra.deg
+                dec_deg = coord.dec.deg
+            except Exception:
+                pass
+
+        # If neither option was provided
+        if ra_deg is None or dec_deg is None:
+            return render_template(
+                "object_calibration.html",
+                error_message="Please enter RA/Dec in either decimal or HMS/DMS format."
+            )
+
+
+        
+
+    if g_file and g_file.filename.strip():
+        g_path = os.path.join(upload_folder, g_file.filename)
+        g_file.save(g_path)
+
+    if r_file and r_file.filename.strip():
+        r_path = os.path.join(upload_folder, r_file.filename)
+        r_file.save(r_path)
+
+
+    # If user uploaded files, use those
+    if g_path and r_path:
+        #full_calibration_with_subid(g_path, "wcs_green_solution.fits", os.environ.get("GREEN_SUBID"))
+        #num_rows = full_calibration_with_subid(r_path, "wcs_red_solution.fits", os.environ.get("RED_SUBID"))
+        full_calibration(g_path, "wcs_green_solution.fits")
+        full_calibration(r_path, "wcs_red_solution.fits")
+
+        standard_g_target, standard_r_target, error_g, error_r, calibration_num = magnitudes(
+            "apass_subset.csv",
+            "wcs_green_solution.fits",
+            "wcs_red_solution.fits",
+            num_rows,
+            ra_deg,
+            dec_deg
+        )
+
+    # If user typed paths instead, use those
+    elif g_text and r_text:
+        full_calibration_with_subid(g_text, "wcs_green_solution.fits", os.environ.get("GREEN_SUBID"))
+        num_rows = full_calibration_with_subid(r_text, "wcs_red_solution.fits", os.environ.get("RED_SUBID"))
+        #full_calibration(g_text, "wcs_green_solution.fits")
+        #num_rows = full_calibration(r_text, "wcs_red_solution.fits")
+
+        standard_g_target, standard_r_target, error_g, error_r, calibration_num, Tgr, Cgr, Tg, Cg = magnitudes(
+            "apass_subset.csv",
+            "wcs_green_solution.fits",
+            "wcs_red_solution.fits",
+            num_rows,
+            ra_deg,
+            dec_deg
+        )
+
+    return render_template(
+        "object_calibration.html",
+        g_text=g_text,
+        r_text=r_text,
+        standard_g_target=standard_g_target,
+        standard_r_target=standard_r_target,
+        error_g=error_g,
+        error_r=error_r,
+        Tgr=Tgr, 
+        Cgr=Cgr, 
+        Tg=Tg, 
+        Cg=Cg
+    )
+
+
+
+
+
+
+
+
+
+
 @app.route("/status")
 def status():
     return status_message

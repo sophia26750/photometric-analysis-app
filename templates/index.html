@@ -9,68 +9,96 @@
             font-family: Arial, Helvetica, sans-serif;
             color: white;
         }
-        .center-heading {
-            font-size: 48px;
+
+        .container {
+            max-width: 900px;
+            margin: 0 auto;
+            padding: 60px 20px;
             text-align: center;
-            margin-top: 10%;
         }
-        .input-box {
-            text-align: center;
+
+        h1 {
+            font-size: 52px;
+            margin-bottom: 10px;
+            font-weight: bold;
+        }
+
+        h2 {
+            font-size: 28px;
             margin-top: 40px;
+            margin-bottom: 10px;
+            font-weight: normal;
         }
-        input[type="text"] {
-            padding: 12px;
-            width: 300px;
+
+        p {
+            font-size: 20px;
+            line-height: 1.6;
+            margin-bottom: 25px;
+        }
+
+        .button {
+            display: inline-block;
+            margin-top: 30px;
+            padding: 14px 28px;
+            background-color: white;
+            color: black;
             font-size: 20px;
             border-radius: 6px;
-            border: none;
+            text-decoration: none;
+            font-weight: bold;
+            transition: 0.3s;
         }
-        input[type="submit"] {
-            padding: 12px 20px;
-            font-size: 20px;
-            margin-left: 10px;
-            border-radius: 6px;
-            border: none;
-            cursor: pointer;
+
+        .button:hover {
+            background-color: #dcdcdc;
         }
-        .center-text {
-            text-align: center;
-            margin-top: 40px;
+
+        hr {
+            border: 0;
+            border-top: 1px solid white;
+            margin: 40px 0;
         }
     </style>
 </head>
+
 <body>
-   
-    
-    <br><br>
-    <div style="text-align:center;">
-        <p style="font-size: 28px;">Subpages here:</p>
-        <a href="/object_calibration" style="color:white; text-decoration:none;">Object Calibration</a>
+
+    <div class="container">
+
+        <h1>Stellar Photometry & Calibration Portal</h1>
+        <p style="font-size: 24px; margin-top: -10px;">
+            Precision. Automation. Scientific Accuracy.
+        </p>
+
+        <hr>
+
+        <p>
+            Welcome to your all‑in‑one platform for automated stellar photometry, 
+            WCS calibration, and magnitude analysis. This tool integrates 
+            Astrometry.net plate‑solving, APASS DR10 catalog matching, 
+            and custom color‑term calibration to deliver accurate 
+            Sloan <strong>g</strong> and <strong>r</strong> magnitudes for any target object.
+        </p>
+
+        <p>
+            Upload your Sloan‑band FITS images, enter your target coordinates, 
+            and let the system handle everything — from WCS solving to 
+            catalog matching, flux extraction, and final calibrated magnitudes.
+        </p>
+
+        <p>
+            Designed for scientific research, student projects, and 
+            high‑precision photometric workflows.
+        </p>
+
+        <hr>
+
+        <h2>Ready to Begin?</h2>
+        <p>Start by calibrating your images and analyzing your target object.</p>
+
+        <a href="/object_calibration" class="button">Go to Object Calibration</a>
+
     </div>
-
-
-    <div class="center-heading">
-        Your Text Goes Here
-    </div>
-
-    <div class="input-box">
-        <form method="POST">
-            <input type="text" name="user_input" placeholder="Type something...">
-            <input type="submit" value="Submit">
-        </form>
-    </div>
-
-    {% if user_text %}
-    <div class="center-text">
-        You entered: {{ user_text }}
-    </div>
-    {% endif %}
-
-
-
-    
-
 
 </body>
 </html>
-
