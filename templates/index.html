@@ -3,60 +3,99 @@
 <head>
     <style>
         body {
-            background-color: black;
+            background-color: #000;
             margin: 0;
             padding: 0;
             font-family: Arial, Helvetica, sans-serif;
-            color: white;
+            color: #f2f2f2;
         }
 
         .container {
             max-width: 900px;
             margin: 0 auto;
-            padding: 60px 20px;
+            padding: 80px 20px;
             text-align: center;
         }
 
         h1 {
-            font-size: 52px;
-            margin-bottom: 10px;
-            font-weight: bold;
+            font-size: 56px;
+            margin-bottom: 15px;
+            font-weight: 700;
+            letter-spacing: 1px;
         }
 
         h2 {
-            font-size: 28px;
-            margin-top: 40px;
-            margin-bottom: 10px;
-            font-weight: normal;
+            font-size: 30px;
+            margin-top: 50px;
+            margin-bottom: 15px;
+            font-weight: 400;
         }
 
         p {
             font-size: 20px;
-            line-height: 1.6;
+            line-height: 1.7;
             margin-bottom: 25px;
+            opacity: 0.9;
+        }
+
+        .tagline {
+            font-size: 26px;
+            margin-top: -5px;
+            margin-bottom: 40px;
+            opacity: 0.85;
+        }
+
+        hr {
+            border: 0;
+            border-top: 1px solid #333;
+            margin: 50px auto;
+            width: 80%;
         }
 
         .button {
             display: inline-block;
-            margin-top: 30px;
-            padding: 14px 28px;
+            margin: 20px 15px;
+            padding: 16px 32px;
             background-color: white;
             color: black;
             font-size: 20px;
-            border-radius: 6px;
+            border-radius: 8px;
             text-decoration: none;
             font-weight: bold;
-            transition: 0.3s;
+            transition: 0.3s ease;
         }
 
         .button:hover {
             background-color: #dcdcdc;
         }
 
-        hr {
-            border: 0;
-            border-top: 1px solid white;
-            margin: 40px 0;
+        .feature-box {
+            margin-top: 40px;
+            padding: 30px;
+            background-color: #111;
+            border: 1px solid #333;
+            border-radius: 12px;
+            box-shadow: 0 0 20px rgba(255,255,255,0.05);
+            text-align: left;
+        }
+
+        .feature-box h3 {
+            font-size: 24px;
+            margin-bottom: 10px;
+            font-weight: 500;
+        }
+
+        .feature-box ul {
+            list-style: none;
+            padding: 0;
+            margin: 0;
+            line-height: 1.8;
+            font-size: 18px;
+        }
+
+        .feature-box li::before {
+            content: "• ";
+            color: #aaa;
         }
     </style>
 </head>
@@ -66,38 +105,43 @@
     <div class="container">
 
         <h1>Stellar Photometry & Calibration Portal</h1>
-        <p style="font-size: 24px; margin-top: -10px;">
-            Precision. Automation. Scientific Accuracy.
-        </p>
+        <p class="tagline">Precision tools for modern astronomical analysis.</p>
 
         <hr>
 
         <p>
-            Welcome to your all‑in‑one platform for automated stellar photometry, 
-            WCS calibration, and magnitude analysis. This tool integrates 
-            Astrometry.net plate‑solving, APASS DR10 catalog matching, 
-            and custom color‑term calibration to deliver accurate 
-            Sloan <strong>g</strong> and <strong>r</strong> magnitudes for any target object.
+            This platform provides a complete, automated workflow for stellar photometry 
+            and magnitude calibration. Whether you're analyzing a single target or an entire 
+            star cluster, the system handles every step — from WCS solving to catalog matching, 
+            flux extraction, color‑term calibration, and final standardized magnitudes.
         </p>
 
         <p>
-            Upload your Sloan‑band FITS images, enter your target coordinates, 
-            and let the system handle everything — from WCS solving to 
-            catalog matching, flux extraction, and final calibrated magnitudes.
+            Built for researchers, students, and observatories, this tool transforms raw FITS 
+            images into scientifically calibrated results with clarity, transparency, and 
+            professional‑grade accuracy.
         </p>
 
-        <p>
-            Designed for scientific research, student projects, and 
-            high‑precision photometric workflows.
-        </p>
+        <div class="feature-box">
+            <h3>What You Can Do Here</h3>
+            <ul>
+                <li>Upload Sloan or Johnson‑band FITS images</li>
+                <li>Automatically solve WCS using Astrometry.net</li>
+                <li>Query APASS DR10 for calibration stars</li>
+                <li>Perform instrumental photometry with robust background subtraction</li>
+                <li>Compute color terms, zero‑points, and calibrated magnitudes</li>
+                <li>Analyze individual objects or full star clusters</li>
+                <li>Generate diagnostic plots for transparency and verification</li>
+            </ul>
+        </div>
 
         <hr>
 
-        <h2>Ready to Begin?</h2>
-        <p>Start by calibrating your images and analyzing your target object.</p>
+        <h2>Begin Your Analysis</h2>
+        <p>Select a workflow to get started.</p>
 
-        <a href="/object_calibration" class="button">Go to Object Calibration</a>
-        <a href="/star_cluster_calibration" class="button">Go to Star Cluster Calibration</a>
+        <a href="/object_calibration" class="button">Object Calibration</a>
+        <a href="/star_cluster_calibration" class="button">Star Cluster Calibration</a>
 
     </div>
 
