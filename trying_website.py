@@ -609,7 +609,35 @@ def magnitudes(csv_file, green_image, red_image, n, RA, DEC):
     new_std_inst = m2_b2[0]*new_std + m2_b2[1] 
 
 
+    plt.figure(figsize=(7,5))
+    plt.plot(inst_g_r, new_std, label=f'Tgr = {round(m1_b1[0], 4)} \n Cgr = {round(m1_b1[1], 4)}')
+    plt.scatter(inst_g_r, st_g_r)
+    plt.xlabel('Instrumental (g-r)')
+    plt.ylabel('Standard (g-r)')
+    plt.title('Instrumental Color Index vs. Standard Color Index')
+    plt.legend()
+
+    color_term_path = "static/object_color_term.png"
+    plt.savefig(color_term_path, dpi=150, bbox_inches="tight")
+    plt.close()
+
     
+    
+    plt.figure(figsize=(7,5))
+    plt.plot(new_std, new_std_inst, label=f"Tg = {round(m2_b2[0], 4)}")
+    plt.scatter(new_std, g_offset)
+    plt.xlabel('Standard (g-r)')
+    plt.ylabel('Offset')
+    plt.title('Standard Color Index vs. Green Offset')
+    plt.legend()
+
+    green_offset_path = "static/object_green_offset.png"
+    plt.savefig(green_offset_path, dpi=150, bbox_inches="tight")
+    plt.close()
+
+
+
+
     standard_g_r_target = m1_b1[0]*(target_g_inst_mag - target_r_inst_mag) + m1_b1[1]
     standard_g_target = m2_b2[0]*standard_g_r_target + m2_b2[1] + target_g_inst_mag
     
@@ -656,8 +684,11 @@ def magnitudes(csv_file, green_image, red_image, n, RA, DEC):
         Tgr, 
         Cgr,
         Tg,
-        Cg
-        ) 
+        Cg,
+        color_term_path,
+        green_offset_path
+    )
+
 
 
 #======================================
@@ -1010,6 +1041,10 @@ def object_calibration():
     ra_hms = None
     dec_dms = None
 
+    color_term_path = None
+    green_offset_path = None
+
+
     upload_folder = "uploads" 
     os.makedirs(upload_folder, exist_ok=True)
 
@@ -1090,7 +1125,7 @@ def object_calibration():
         #full_calibration(g_text, "wcs_green_solution.fits")
         #num_rows = full_calibration(r_text, "wcs_red_solution.fits")
 
-        standard_g_target, standard_r_target, error_g, error_r, calibration_num, Tgr, Cgr, Tg, Cg = magnitudes(
+        standard_g_target, standard_r_target, error_g, error_r, calibration_num, Tgr, Cgr, Tg, Cg, color_term_path, green_offset_path = magnitudes(
             "apass_subset.csv",
             "wcs_green_solution.fits",
             "wcs_red_solution.fits",
@@ -1101,17 +1136,18 @@ def object_calibration():
 
     return render_template(
         "object_calibration.html",
-        g_text=g_text,
-        r_text=r_text,
         standard_g_target=standard_g_target,
         standard_r_target=standard_r_target,
         error_g=error_g,
         error_r=error_r,
-        Tgr=Tgr, 
-        Cgr=Cgr, 
-        Tg=Tg, 
-        Cg=Cg
+        Tgr=Tgr,
+        Cgr=Cgr,
+        Tg=Tg,
+        Cg=Cg,
+        color_term_path=color_term_path,
+        green_offset_path=green_offset_path
     )
+
 
 
 # FOR STAR CLUSTER 
@@ -1286,12 +1322,6 @@ def star_cluster_calibration():
     # GET request
     # -----------------------------
     return render_template("star_cluster_calibration.html")
-
-
-
-
-
-
 
 
 

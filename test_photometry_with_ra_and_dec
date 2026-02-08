@@ -654,8 +654,8 @@ def magnitudes(csv_file, green_image, red_image, n, RA, DEC):
 
     
     return (
-        standard_g_target, 
-        standard_r_target, 
+        standard_g_target[0], 
+        standard_r_target[0], 
         error_g, 
         error_r, 
         calibration_num, 

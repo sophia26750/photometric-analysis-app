@@ -135,6 +135,22 @@
         Cgr (Intercept g–r): {{ Cgr }}<br>
         Tg  (Green Zero‑Point Slope): {{ Tg }}<br>
         Cg  (Green Zero‑Point Intercept): {{ Cg }}<br>
+        
+        {% if color_term_path %}
+            <div style="margin-top:30px;">
+                <h3>Color Calibration Plot</h3>
+                <img src="{{ url_for('static', filename=color_term_path.split('/')[-1]) }}"
+                    style="width:500px; border:1px solid white; margin-top:10px;">
+            </div>
+        {% endif %}
+
+        {% if green_offset_path %}
+            <div style="margin-top:30px;">
+                <h3>Green Offset Calibration Plot</h3>
+                <img src="{{ url_for('static', filename=green_offset_path.split('/')[-1]) }}"
+                    style="width:500px; border:1px solid white; margin-top:10px;">
+            </div>
+        {% endif %}
 
 
     </div>
