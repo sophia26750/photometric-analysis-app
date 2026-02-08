@@ -469,6 +469,122 @@ def mask_apass_region(
     return df_masked
 
 
+def show_cluster_and_calibration_image(
+    image_fits,
+    ra_center,
+    dec_center,
+    cluster_radius_arcmin,
+    cluster_csv="cluster_stars.csv",
+    calib_csv="calibration_stars.csv"
+):
+    """
+    Display the image with:
+    - a circle marking the star cluster radius
+    - points for cluster stars
+    - points for calibration stars
+    """
+
+    # Load image + WCS
+    hdu = fits.open(image_fits)[0]
+    data = hdu.data
+    w = WCS(hdu.header)
+
+    # Load cluster + calibration catalogs
+    df_cluster = pd.read_csv(cluster_csv)
+    df_calib   = pd.read_csv(calib_csv)
+
+    # Convert RA/Dec to pixel coordinates
+    cl_x, cl_y = w.all_world2pix(df_cluster["ra"].values,
+                                 df_cluster["dec"].values, 1)
+    ca_x, ca_y = w.all_world2pix(df_calib["ra"].values,
+                                 df_calib["dec"].values, 1)
+
+    # Cluster center in pixels
+    cx, cy = w.all_world2pix(ra_center, dec_center, 1)
+
+    # Convert radius from arcmin to pixels using local scale
+    # (approximate: use CD matrix / CDELT)
+    # arcsec per pixel from WCS
+   # arcsec per pixel from WCS
+    # Always returns a clean float array in arcsec/pixel
+    # --- UNIVERSAL PIXEL SCALE NORMALIZER ---
+    raw_cdelt = w.proj_plane_pixel_scales()
+
+    cdelt_list = []
+    for x in raw_cdelt:
+        try:
+            # Quantity → strip units
+            cdelt_list.append(float(x.to(u.deg).value))
+        except Exception:
+            try:
+                # Plain float or ndarray element
+                cdelt_list.append(float(x))
+            except Exception:
+                raise TypeError(f"Unusable pixel scale element: {x}")
+
+    cdelt = np.array(cdelt_list) * 3600.0  # arcsec/pixel
+    pix_scale = float(np.mean(cdelt))
+    radius_pix = (cluster_radius_arcmin * 60.0) / pix_scale
+
+
+
+    fig, ax = plt.subplots(figsize=(8, 8), subplot_kw={"projection": w})
+    # Better brightness scaling for star fields
+    # Aggressive visibility stretch for very dark FITS images
+    data = data.astype(float)
+
+    # Remove background
+    med = np.median(data)
+    data2 = data - med
+    data2[data2 < 0] = 0
+
+    # Scale by a very low percentile (brightens faint stars)
+    p = np.percentile(data2[data2 > 0], 0.1)  # 0.1th percentile
+    if p <= 0:
+        p = np.percentile(data2, 1)
+
+    scaled = data2 / p
+
+    # Asinh stretch with strong boost
+    stretched = np.arcsinh(scaled * 5)
+
+    # Normalize to 0–1
+    stretched /= stretched.max()
+
+    im = ax.imshow(
+        stretched,
+        origin="lower",
+        cmap="gray",
+        vmin=0,
+        vmax=1
+    )
+
+
+
+    # Cluster circle
+    circ = Circle((cx, cy), radius_pix, edgecolor="yellow",
+                  facecolor="none", linewidth=2, alpha=0.9)
+    ax.add_patch(circ)
+
+    # Plot cluster stars
+    ax.scatter(cl_x, cl_y, s=6, edgecolor="cyan", facecolor="none",
+               linewidth=0.2, label="Cluster stars")
+
+    # Plot calibration stars
+    ax.scatter(ca_x, ca_y, s=6, color="red", linewidth=0.2, alpha=0.8,
+               label="Calibration stars")
+
+    # Mark cluster center
+    ax.scatter(cx, cy, s=60, marker="+", color="yellow", linewidth=2,
+               label="Cluster center")
+
+    ax.set_xlabel("RA")
+    ax.set_ylabel("Dec")
+    ax.set_title("Cluster Region and Calibration Stars")
+    ax.legend(loc="upper right")
+    plt.tight_layout()
+    plt.show()
+
 def split_apass_cluster_and_calibration(
     apass_csv,
     ra_center,
@@ -770,6 +886,16 @@ split_apass_cluster_and_calibration(
     cluster_radius_arcmin=inner_radius_arcmin,
     outer_radius_arcmin=outer_radius_arcmin
 )
+
+show_cluster_and_calibration_image(
+    "wcs_green_solution.fits",
+    ra_center=301.7333,
+    dec_center=35.8492,
+    cluster_radius_arcmin=inner_radius_arcmin,
+    cluster_csv="cluster_stars.csv",
+    calib_csv="calibration_stars.csv"
+)
+
 
 print(star_cluster_magnitudes(
     "apass_subset.csv",
