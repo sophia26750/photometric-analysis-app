@@ -556,7 +556,7 @@ def split_apass_cluster_and_calibration(
     return df_cluster, df_calib
 
 
-def magnitudes(
+def star_cluster_magnitudes(
     apass_csv,
     green_image,
     red_image,
@@ -771,7 +771,7 @@ split_apass_cluster_and_calibration(
     outer_radius_arcmin=outer_radius_arcmin
 )
 
-print(magnitudes(
+print(star_cluster_magnitudes(
     "apass_subset.csv",
     "wcs_green_solution.fits",
     "wcs_red_solution.fits",

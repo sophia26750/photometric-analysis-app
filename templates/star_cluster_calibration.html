@@ -1,0 +1,141 @@
+<!DOCTYPE html>
+<html>
+<head>
+    <style>
+        body {
+            background-color: black;
+            color: white;
+            font-family: Arial, Helvetica, sans-serif;
+            text-align: center;
+        }
+
+        input[type="text"] {
+            width: 60%;
+            padding: 8px;
+            margin: 10px 0;
+            font-size: 16px;
+        }
+
+        input[type="submit"] {
+            padding: 10px 20px;
+            font-size: 16px;
+            margin-top: 15px;
+        }
+
+        img {
+            margin-top: 25px;
+            border: 1px solid white;
+            max-width: 80%;
+        }
+    </style>
+</head>
+<body>
+
+    <a href="/" style="color:white; text-decoration:none;">Back to Home</a>
+    <br><br>
+
+    <h1>Star Cluster Calibration</h1>
+    <p>Upload Sloan g and r images and enter the cluster coordinates.</p>
+
+    <hr style="border: 0; border-top: 0.5px solid white;">
+
+    <p style="font-size: 20px; margin: 20px 0;">
+        Enter the Right Ascension, Declination, and Cluster Radius:
+    </p>
+
+    <form method="POST" enctype="multipart/form-data">
+
+        <h2>Cluster Coordinates</h2>
+
+        <!-- Decimal input -->
+        <label>RA (decimal degrees):</label><br>
+        <input type="text" name="ra_decimal" placeholder="e.g. 301.7333"><br><br>
+
+        <label>Dec (decimal degrees):</label><br>
+        <input type="text" name="dec_decimal" placeholder="e.g. 35.8492"><br><br>
+
+        <p>OR</p>
+
+        <!-- Sexagesimal input -->
+        <label>RA (HMS):</label><br>
+        <input type="text" name="ra_hms" placeholder="e.g. 20h 06m 56s"><br><br>
+
+        <label>Dec (DMS):</label><br>
+        <input type="text" name="dec_dms" placeholder="e.g. +35° 50′ 57″"><br><br>
+
+        <hr>
+
+        <h2>Cluster Radius</h2>
+        <label>Cluster radius (arcminutes):</label><br>
+        <input type="text" name="cluster_radius_arcmin" placeholder="e.g. 20"><br><br>
+
+        <hr>
+
+        <h2>Provide Sloan g and r Images</h2>
+
+        <label>Enter Sloan g image path:</label><br>
+        <input type="text" name="g_link"><br><br>
+
+        <label>Enter Sloan r image path:</label><br>
+        <input type="text" name="r_link"><br><br>
+
+        <p>OR upload FITS files:</p>
+
+        <label>Upload Sloan g FITS:</label>
+        <input type="file" name="g_file" accept=".fits"><br><br>
+
+        <label>Upload Sloan r FITS:</label>
+        <input type="file" name="r_file" accept=".fits"><br><br>
+
+        <button type="submit">Run Cluster Calibration</button>
+
+    </form>
+
+    <hr style="border: 0; border-top: 0.5px solid white;">
+
+    {% if error_message %}
+        <p style="color: red; font-size: 18px;">{{ error_message }}</p>
+    {% endif %}
+
+
+    <div style="margin-top:20px;">
+
+        <h3>Cluster Calibration Results</h3>
+
+    {% if Tgr %}
+        <!-- Calibration Coefficients -->
+        <h3>Calibration Coefficients</h3>
+        <p>
+            Tgr (Color Term): {{ Tgr }}<br>
+            Cgr (Color Intercept): {{ Cgr }}<br>
+            Tg  (Green Slope): {{ Tg }}<br>
+            Cg  (Green Intercept): {{ Cg }}<br>
+        </p>
+
+        <hr style="border:0; border-top:1px solid white; width:70%; margin:25px auto;">
+
+        <!-- CMD Plot -->
+        {% if cmd_path %}
+            <h3>Color–Magnitude Diagram</h3>
+            <img src="/{{ cmd_path }}" alt="CMD Plot">
+        {% endif %}
+
+        <!-- Color Calibration Plot -->
+        {% if color_path %}
+            <h3>Color Calibration Plot</h3>
+            <img src="/{{ color_path }}" alt="Color Calibration">
+        {% endif %}
+
+        <!-- Green Offset Plot -->
+        {% if offset_path %}
+            <h3>Green Offset Plot</h3>
+            <img src="/{{ offset_path }}" alt="Green Offset">
+        {% endif %}
+    {% endif %}
+
+   
+
+    
+
+</body>
+</html>

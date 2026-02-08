@@ -28,6 +28,10 @@ import matplotlib.lines as mlines
 import numpy as np
 import pyvo
 import pandas as pd
+import matplotlib
+matplotlib.use("Agg")
+
+
 
 from photutils.detection import DAOStarFinder
 
@@ -331,7 +335,14 @@ def full_calibration(image, wcs_image_name):
     status_message = f"Done!"
 
     return num_rows
-    
+
+
+
+
+#======================================
+# Functions used for Target Photometry 
+#======================================
+
 def detect_stars(image, fwhm=3.0, sigma=3.0, threshold=5.0):
     data = fits.getdata(image)
     mean, median, std = sigma_clipped_stats(data, sigma=sigma)
@@ -433,7 +444,6 @@ def lsrl(x, y):
     m, b = np.polyfit(x, y, 1)
     sd = np.std(y - (m*x + b))
     return m, b, sd
-
 
 
 def magnitudes(csv_file, green_image, red_image, n, RA, DEC):
@@ -649,7 +659,316 @@ def magnitudes(csv_file, green_image, red_image, n, RA, DEC):
         Cg
         ) 
 
-    
+
+#======================================
+# Functions used for CMD Plot 
+#======================================
+
+def mask_apass_region(
+    apass_csv,
+    ra_center,
+    dec_center,
+    inner_radius_arcmin=0,
+    outer_radius_arcmin=10,
+    output_csv="starcluster_calibration.csv"
+):
+    """
+    Create a masked APASS CSV containing only stars within a circular or annular
+    region around the cluster center, and visualize the mask using Matplotlib.
+    """
+
+    # Load APASS catalog
+    df = pd.read_csv(apass_csv)
+
+    # Convert APASS stars to SkyCoord
+    star_coords = SkyCoord(df["ra"].values * u.deg,
+                           df["dec"].values * u.deg)
+
+    # Cluster center
+    center = SkyCoord(ra_center * u.deg, dec_center * u.deg)
+
+    # Angular separation in arcminutes
+    sep = star_coords.separation(center).arcminute
+
+    # Mask: keep stars between inner and outer radius
+    mask = (sep >= inner_radius_arcmin) & (sep <= outer_radius_arcmin)
+
+    # Save masked CSV
+    df_masked = df[mask]
+    df_masked.to_csv(output_csv, index=False)
+
+    print(f"Saved masked APASS file: {output_csv}")
+    print(f"Stars kept: {len(df_masked)}")
+
+    # ============================
+    #       VISUALIZATION
+    # ============================
+
+    # Convert RA/Dec to offsets in arcminutes for plotting
+    dra = (df["ra"].values - ra_center) * 60  # arcmin
+    ddec = (df["dec"].values - dec_center) * 60  # arcmin
+
+    fig, ax = plt.subplots(figsize=(8, 8))
+
+    # Plot all APASS stars
+    ax.scatter(dra, ddec, s=10, color="gray", alpha=0.4, label="All APASS stars")
+
+    # Plot masked stars
+    ax.scatter(dra[mask], ddec[mask], s=20, color="red", label="Stars inside mask")
+
+    # Draw inner and outer circles
+    theta = np.linspace(0, 2*np.pi, 400)
+    ax.plot(
+        inner_radius_arcmin * np.cos(theta),
+        inner_radius_arcmin * np.sin(theta),
+        color="blue",
+        linestyle="--",
+        label="Inner radius"
+    )
+    ax.plot(
+        outer_radius_arcmin * np.cos(theta),
+        outer_radius_arcmin * np.sin(theta),
+        color="green",
+        linestyle="-",
+        label="Outer radius"
+    )
+
+    # Mark cluster center
+    ax.scatter(0, 0, color="yellow", s=80, edgecolor="black", label="Cluster center")
+
+    ax.set_xlabel("ΔRA (arcmin)")
+    ax.set_ylabel("ΔDec (arcmin)")
+    ax.set_title("APASS Stars and Masked Cluster Region")
+    ax.set_aspect("equal")
+    ax.legend()
+    plt.gca().invert_xaxis()  # RA increases to the left
+
+    return df_masked
+
+def split_apass_cluster_and_calibration(
+    apass_csv,
+    ra_center,
+    dec_center,
+    cluster_radius_arcmin,
+    outer_radius_arcmin=None,
+    cluster_csv="cluster_stars.csv",
+    calib_csv="calibration_stars.csv"
+):
+    """
+    Split APASS catalog into:
+    - cluster stars (inside cluster_radius_arcmin)
+    - calibration stars (outside cluster_radius_arcmin, optionally inside outer_radius_arcmin)
+    """
+
+    df = pd.read_csv(apass_csv)
+
+    # Coordinates
+    coords = SkyCoord(df["ra"].values * u.deg,
+                      df["dec"].values * u.deg)
+    center = SkyCoord(ra_center * u.deg, dec_center * u.deg)
+
+    # Separation in arcmin
+    sep = coords.separation(center).arcminute
+
+    # Masks
+    cluster_mask = sep <= cluster_radius_arcmin
+
+    if outer_radius_arcmin is None:
+        calib_mask = sep > cluster_radius_arcmin
+    else:
+        calib_mask = (sep > cluster_radius_arcmin) & (sep <= outer_radius_arcmin)
+
+    # Save CSVs
+    df_cluster = df[cluster_mask]
+    df_calib   = df[calib_mask]
+
+    df_cluster.to_csv(cluster_csv, index=False)
+    df_calib.to_csv(calib_csv, index=False)
+
+    print(f"Saved cluster stars → {cluster_csv} ({len(df_cluster)} stars)")
+    print(f"Saved calibration stars → {calib_csv} ({len(df_calib)} stars)")
+
+    # ============================
+    # Visualization
+    # ============================
+    dra  = (df["ra"].values - ra_center) * 60
+    ddec = (df["dec"].values - dec_center) * 60
+
+    fig, ax = plt.subplots(figsize=(8, 8))
+
+    # All stars
+    ax.scatter(dra, ddec, s=10, color="gray", alpha=0.3, label="All APASS stars")
+
+    # Cluster stars
+    ax.scatter(dra[cluster_mask], ddec[cluster_mask],
+               s=25, color="blue", label="Cluster stars")
+
+    # Calibration stars
+    ax.scatter(dra[calib_mask], ddec[calib_mask],
+               s=25, color="red", label="Calibration stars")
+
+    # Draw cluster radius
+    theta = np.linspace(0, 2*np.pi, 400)
+    ax.plot(cluster_radius_arcmin * np.cos(theta),
+            cluster_radius_arcmin * np.sin(theta),
+            color="blue", linestyle="--", label="Cluster radius")
+
+    # Optional outer radius
+    if outer_radius_arcmin is not None:
+        ax.plot(outer_radius_arcmin * np.cos(theta),
+                outer_radius_arcmin * np.sin(theta),
+                color="green", linestyle="-", label="Outer radius")
+
+    ax.scatter(0, 0, color="yellow", s=80, edgecolor="black", label="Cluster center")
+
+    ax.set_xlabel("ΔRA (arcmin)")
+    ax.set_ylabel("ΔDec (arcmin)")
+    ax.set_aspect("equal")
+    ax.legend()
+    plt.gca().invert_xaxis()
+    plt.title("Cluster vs Calibration Star Mask")
+
+
+    return df_cluster, df_calib
+
+
+def star_cluster_magnitudes(
+    apass_csv,
+    green_image,
+    red_image,
+    ra_center,
+    dec_center,
+    inner_radius_arcmin,
+    outer_radius_arcmin,
+    output_calib_csv="cluster_calibrated_magnitudes.csv"
+):
+    calib_cat = pd.read_csv("calibration_stars.csv")
+    ap_ra  = calib_cat["ra"].values
+    ap_dec = calib_cat["dec"].values
+    g_std  = calib_cat["mag_g"].values
+    r_std  = calib_cat["mag_r"].values
+
+    w_g = WCS(green_image)
+    w_r = WCS(red_image)
+
+    ap_x_g, ap_y_g = w_g.all_world2pix(ap_ra, ap_dec, 1)
+    ap_x_r, ap_y_r = w_r.all_world2pix(ap_ra, ap_dec, 1)
+
+    green_flux = flux(ap_x_g, ap_y_g, 5, green_image)
+    red_flux   = flux(ap_x_r, ap_y_r, 5, red_image)
+
+    good = (
+        (green_flux > 0) &
+        np.isfinite(green_flux) &
+        (red_flux > 0) &
+        np.isfinite(red_flux)
+    )
+
+    green_flux = green_flux[good]
+    red_flux   = red_flux[good]
+    g_std      = g_std[good]
+    r_std      = r_std[good]
+
+    inst_g = -2.5 * np.log10(green_flux)
+    inst_r = -2.5 * np.log10(red_flux)
+
+    inst_g_r = inst_g - inst_r
+    st_g_r   = g_std - r_std
+    g_offset = g_std - inst_g
+
+    Tgr, Cgr, err_color = lsrl(inst_g_r, st_g_r)
+    Tg,  Cg,  err_g     = lsrl(st_g_r, g_offset)
+
+    sources = detect_stars(green_image, threshold=3.0)
+    det_x = np.array(sources["xcentroid"])
+    det_y = np.array(sources["ycentroid"])
+
+    det_ra, det_dec = w_g.all_pix2world(det_x, det_y, 1)
+    det_coords = SkyCoord(det_ra*u.deg, det_dec*u.deg)
+    center = SkyCoord(ra_center*u.deg, dec_center*u.deg)
+    sep = det_coords.separation(center).arcminute
+
+    cluster_mask = sep <= inner_radius_arcmin
+
+    cl_x = det_x[cluster_mask]
+    cl_y = det_y[cluster_mask]
+    cl_ra = det_ra[cluster_mask]
+    cl_dec = det_dec[cluster_mask]
+
+    cl_flux_g = flux(cl_x, cl_y, 5, green_image)
+    cl_x_r, cl_y_r = w_r.all_world2pix(cl_ra, cl_dec, 1)
+    cl_flux_r = flux(cl_x_r, cl_y_r, 5, red_image)
+
+    good_cl = (
+        (cl_flux_g > 0) &
+        np.isfinite(cl_flux_g) &
+        (cl_flux_r > 0) &
+        np.isfinite(cl_flux_r)
+    )
+
+    cl_flux_g = cl_flux_g[good_cl]
+    cl_flux_r = cl_flux_r[good_cl]
+    cl_ra     = cl_ra[good_cl]
+    cl_dec    = cl_dec[good_cl]
+
+    cl_inst_g = -2.5 * np.log10(cl_flux_g)
+    cl_inst_r = -2.5 * np.log10(cl_flux_r)
+    cl_inst_g_r = cl_inst_g - cl_inst_r
+
+    cl_std_g_r = Tgr * cl_inst_g_r + Cgr
+    cl_std_g   = Tg * cl_std_g_r + Cg + cl_inst_g
+    cl_std_r   = cl_std_g - cl_std_g_r
+
+    # ============================================================
+    # CMD plot
+    # ============================================================
+    plt.figure(figsize=(7,6))
+    plt.scatter(cl_std_g_r, cl_std_g, s=12, alpha=0.8)
+    plt.gca().invert_yaxis()
+    plt.xlabel("Standard (g - r)")
+    plt.ylabel("Standard g")
+    plt.title("Cluster CMD (Calibrated)")
+    cmd_path = "static/cmd_plot.png"
+    plt.savefig(cmd_path, dpi=150, bbox_inches="tight")
+    plt.close()
+
+    # ============================================================
+    # Color calibration plot
+    # ============================================================
+    plt.figure(figsize=(7,5))
+    plt.scatter(inst_g_r, st_g_r, s=15, alpha=0.7)
+    plt.plot(inst_g_r, Tgr*inst_g_r + Cgr, color="red")
+    plt.text(
+        0.05, 0.95,
+        f"Tgr={Tgr:.4f}\nCgr={Cgr:.4f}",
+        transform=plt.gca().transAxes,
+        fontsize=12,
+        verticalalignment="top",
+        bbox=dict(facecolor="black", alpha=0.3, edgecolor="white")
+    )
+    color_path = "static/color_calibration.png"
+    plt.savefig(color_path, dpi=150, bbox_inches="tight")
+    plt.close()
+
+    # ============================================================
+    # Green offset plot
+    # ============================================================
+    plt.figure(figsize=(7,5))
+    plt.scatter(st_g_r, g_offset, s=15, alpha=0.7)
+    plt.plot(st_g_r, Tg*st_g_r + Cg, color="red")
+    plt.text(
+        0.05, 0.95,
+        f"Tg={Tg:.4f}\nCg={Cg:.4f}",
+        transform=plt.gca().transAxes,
+        fontsize=12,
+        verticalalignment="top",
+        bbox=dict(facecolor="black", alpha=0.3, edgecolor="white")
+    )
+    offset_path = "static/green_offset.png"
+    plt.savefig(offset_path, dpi=150, bbox_inches="tight")
+    plt.close()
+
+    return cmd_path, color_path, offset_path, Tgr, Cgr, Tg, Cg
 
 
 
@@ -795,132 +1114,179 @@ def object_calibration():
     )
 
 
-
-@app.route("/object_calibration", methods=["GET", "POST"])
+# FOR STAR CLUSTER 
+@app.route("/star_cluster_calibration", methods=["GET", "POST"])
 def star_cluster_calibration():
-    user_text = None
+    # -----------------------------
+    # Initialize variables
+    # -----------------------------
     g_text = None
     r_text = None
     g_file = None
     r_file = None
-    g_path = None 
+    g_path = None
     r_path = None
 
-    error_g = None 
-    error_r = None
-    Tgr = None
-    Cgr = None
-    Tg = None
-    Cg = None
+    ra_deg = None
+    dec_deg = None
+    cluster_radius_arcmin = None
 
-
-    ra_decimal = None
-    dec_decimal = None
-    ra_hms = None
-    dec_dms = None
-
-    upload_folder = "uploads" 
+    upload_folder = "uploads"
     os.makedirs(upload_folder, exist_ok=True)
 
+    # -----------------------------
+    # Handle POST
+    # -----------------------------
     if request.method == "POST":
-        # Single input case
-        user_text = request.form.get("calibration_input")
 
-        
-
-        # Both-input case
-        g_text = request.form.get("g_link_both")
-        r_text = request.form.get("r_link_both")
-
-        g_file = request.files.get("g_file")
-        r_file = request.files.get("r_file")
-
+        # -----------------------------
+        # 1. Get RA/Dec inputs
+        # -----------------------------
         ra_decimal = request.form.get("ra_decimal")
         dec_decimal = request.form.get("dec_decimal")
         ra_hms = request.form.get("ra_hms")
         dec_dms = request.form.get("dec_dms")
 
-        # Option A: decimal degrees
+        # Decimal degrees
         if ra_decimal and dec_decimal:
             try:
                 ra_deg = float(ra_decimal)
                 dec_deg = float(dec_decimal)
             except ValueError:
-                pass
+                return render_template(
+                    "star_cluster_calibration.html",
+                    error_message="Invalid decimal RA/Dec format."
+                )
 
-        # Option B: HMS/DMS
+        # HMS/DMS
         elif ra_hms and dec_dms:
             try:
                 coord = SkyCoord(ra_hms, dec_dms, unit=(u.hourangle, u.deg))
                 ra_deg = coord.ra.deg
                 dec_deg = coord.dec.deg
             except Exception:
-                pass
+                return render_template(
+                    "star_cluster_calibration.html",
+                    error_message="Invalid HMS/DMS RA/Dec format."
+                )
 
-        # If neither option was provided
-        if ra_deg is None or dec_deg is None:
+        else:
             return render_template(
-                "object_calibration.html",
-                error_message="Please enter RA/Dec in either decimal or HMS/DMS format."
+                "star_cluster_calibration.html",
+                error_message="Please enter RA/Dec in decimal or HMS/DMS format."
             )
 
+        # -----------------------------
+        # 2. Cluster radius (arcmin)
+        # -----------------------------
+        cluster_radius_arcmin = request.form.get("cluster_radius_arcmin")
+        if not cluster_radius_arcmin:
+            return render_template(
+                "star_cluster_calibration.html",
+                error_message="Please enter a cluster radius in arcminutes."
+            )
 
-        
+        try:
+            cluster_radius_arcmin = float(cluster_radius_arcmin)
+        except ValueError:
+            return render_template(
+                "star_cluster_calibration.html",
+                error_message="Cluster radius must be a number."
+            )
 
-    if g_file and g_file.filename.strip():
-        g_path = os.path.join(upload_folder, g_file.filename)
-        g_file.save(g_path)
+        outer_radius_arcmin = cluster_radius_arcmin * 1.5
 
-    if r_file and r_file.filename.strip():
-        r_path = os.path.join(upload_folder, r_file.filename)
-        r_file.save(r_path)
+        # -----------------------------
+        # 3. Get image inputs
+        # -----------------------------
+        g_text = request.form.get("g_link")
+        r_text = request.form.get("r_link")
 
+        g_file = request.files.get("g_file")
+        r_file = request.files.get("r_file")
 
-    # If user uploaded files, use those
-    if g_path and r_path:
-        #full_calibration_with_subid(g_path, "wcs_green_solution.fits", os.environ.get("GREEN_SUBID"))
-        #num_rows = full_calibration_with_subid(r_path, "wcs_red_solution.fits", os.environ.get("RED_SUBID"))
-        full_calibration(g_path, "wcs_green_solution.fits")
-        full_calibration(r_path, "wcs_red_solution.fits")
+        # Uploaded files
+        if g_file and g_file.filename.strip():
+            g_path = os.path.join(upload_folder, g_file.filename)
+            g_file.save(g_path)
 
-        standard_g_target, standard_r_target, error_g, error_r, calibration_num = magnitudes(
+        if r_file and r_file.filename.strip():
+            r_path = os.path.join(upload_folder, r_file.filename)
+            r_file.save(r_path)
+
+        # -----------------------------
+        # 4. Determine image sources
+        # -----------------------------
+        if g_path and r_path:
+            green_image = g_path
+            red_image = r_path
+
+            #full_calibration(green_image, "wcs_green_solution.fits")
+            #full_calibration(red_image, "wcs_red_solution.fits")
+
+            full_calibration_with_subid(green_image, "wcs_green_solution.fits", os.environ.get("GREEN_SUBID_SC"))
+            full_calibration_with_subid(red_image, "wcs_red_solution.fits", os.environ.get("RED_SUBID_SC"))
+
+        elif g_text and r_text:
+            green_image = g_text
+            red_image = r_text
+
+            #full_calibration(green_image, "wcs_green_solution.fits")
+            #full_calibration(red_image, "wcs_red_solution.fits")
+
+            full_calibration_with_subid(green_image, "wcs_green_solution.fits", os.environ.get("GREEN_SUBID_SC"))
+            full_calibration_with_subid(red_image, "wcs_red_solution.fits", os.environ.get("RED_SUBID_SC"))
+
+        else:
+            return render_template(
+                "star_cluster_calibration.html",
+                error_message="Please upload or link BOTH Sloan g and r images."
+            )
+
+        # -----------------------------
+        # 5. Split APASS into cluster + calibration
+        # -----------------------------
+        split_apass_cluster_and_calibration(
+            "apass_subset.csv",
+            ra_center=ra_deg,
+            dec_center=dec_deg,
+            cluster_radius_arcmin=cluster_radius_arcmin,
+            outer_radius_arcmin=outer_radius_arcmin
+        )
+
+        # -----------------------------
+        # 6. Run final star cluster photometry
+        # -----------------------------
+        cmd_path, color_path, offset_path, Tgr, Cgr, Tg, Cg = star_cluster_magnitudes(
             "apass_subset.csv",
             "wcs_green_solution.fits",
             "wcs_red_solution.fits",
-            num_rows,
-            ra_deg,
-            dec_deg
+            ra_center=ra_deg,
+            dec_center=dec_deg,
+            inner_radius_arcmin=cluster_radius_arcmin,
+            outer_radius_arcmin=outer_radius_arcmin
         )
 
-    # If user typed paths instead, use those
-    elif g_text and r_text:
-        full_calibration_with_subid(g_text, "wcs_green_solution.fits", os.environ.get("GREEN_SUBID"))
-        num_rows = full_calibration_with_subid(r_text, "wcs_red_solution.fits", os.environ.get("RED_SUBID"))
-        #full_calibration(g_text, "wcs_green_solution.fits")
-        #num_rows = full_calibration(r_text, "wcs_red_solution.fits")
-
-        standard_g_target, standard_r_target, error_g, error_r, calibration_num, Tgr, Cgr, Tg, Cg = magnitudes(
-            "apass_subset.csv",
-            "wcs_green_solution.fits",
-            "wcs_red_solution.fits",
-            num_rows,
-            ra_deg,
-            dec_deg
+        # -----------------------------
+        # 7. Render results
+        # -----------------------------
+        return render_template(
+            "star_cluster_calibration.html",
+            cmd_path=cmd_path,
+            color_path=color_path,
+            offset_path=offset_path,
+            Tgr=Tgr, 
+            Cgr=Cgr, 
+            Tg=Tg, 
+            Cg=Cg
         )
 
-    return render_template(
-        "object_calibration.html",
-        g_text=g_text,
-        r_text=r_text,
-        standard_g_target=standard_g_target,
-        standard_r_target=standard_r_target,
-        error_g=error_g,
-        error_r=error_r,
-        Tgr=Tgr, 
-        Cgr=Cgr, 
-        Tg=Tg, 
-        Cg=Cg
-    )
+
+    # -----------------------------
+    # GET request
+    # -----------------------------
+    return render_template("star_cluster_calibration.html")
+
 
 
 
