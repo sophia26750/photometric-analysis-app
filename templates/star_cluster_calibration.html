@@ -233,6 +233,18 @@
         </div>
         {% endif %}
 
+        {% if overlay_path %}
+            <div class="plot-card">
+                <h3>Cluster Overlay</h3>
+                <img src="{{ url_for('static', filename='cluster_overlay.png') }}"
+                    alt="Cluster Overlay"
+                    class="img-fluid rounded shadow">
+            </div>
+        {% endif %}
+
+        
+
+
         {% if color_path %}
         <div class="plot-card">
             <h3>Color Calibration Plot</h3>
@@ -246,6 +258,8 @@
             <img src="/{{ offset_path }}" alt="Green Offset">
         </div>
         {% endif %}
+
+
     {% endif %}
 
 </body>

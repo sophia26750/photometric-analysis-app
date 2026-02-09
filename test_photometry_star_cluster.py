@@ -296,7 +296,7 @@ def full_calibration(image, wcs_image_name, subid_key=None):
     # 6. Query APASS around the solved coordinates
     ra = astro_results["ra"]
     dec = astro_results["dec"]
-    radius = round(astro_results["radius"] * 0.7, 1)
+    radius = round(astro_results["radius"] * 0.6, 1)
 
     num_rows = query_apass_to_csv(ra, dec, radius, "apass_subset.csv")
     return num_rows
@@ -559,11 +559,17 @@ def show_cluster_and_calibration_image(
         vmax=1
     )
 
-
+    
 
     # Cluster circle
-    circ = Circle((cx, cy), radius_pix, edgecolor="yellow",
-                  facecolor="none", linewidth=2, alpha=0.9)
+    circ = Circle(
+        (cx, cy),
+        radius_pix,
+        edgecolor=(1, 1, 0, 0.25),   # RGBA: pale yellow, 25% opacity
+        facecolor="none",
+        linewidth=0.8
+    )
+
     ax.add_patch(circ)
 
     # Plot cluster stars
@@ -577,6 +583,11 @@ def show_cluster_and_calibration_image(
     # Mark cluster center
     ax.scatter(cx, cy, s=60, marker="+", color="yellow", linewidth=2,
                label="Cluster center")
+
+
+    ny, nx = data.shape
+    ax.set_xlim(0, nx)
+    ax.set_ylim(0, ny)
 
     ax.set_xlabel("RA")
     ax.set_ylabel("Dec")
