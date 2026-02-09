@@ -102,42 +102,43 @@ def safe_get_json(url):
         return None
 
 def wait_for_job(sub_id, timeout=180):
-    global status_message
     url = f"http://nova.astrometry.net/api/submissions/{sub_id}"
+
     for i in range(timeout):
-        r = requests.get(url).json()
+        r = safe_get_json(url)
+        if r is None:
+            print("Error: Could not retrieve submission status.")
+            return None
+
         jobs = r.get("jobs", [])
         if jobs and jobs[0] is not None:
-            print("Job found:", jobs[0])
-
-            status_message = "Job ID achieved...please wait for astrometry results"
-
+            print(f"Job found: {jobs[0]}")
             return jobs[0]
-        print("Waiting for job...", i)        
-        status_message = f"Waiting to achieve Job ID... {i}"
 
+        print(f"Waiting for job... {i}")
         time.sleep(2)
+
     raise TimeoutError("Job did not appear in time.")
-    status_message = "Error: Astrometry.net did not return a job ID in time."
+
          
 
 
 def wait_for_calibration(job_id, timeout=180):
     url = f"http://nova.astrometry.net/api/jobs/{job_id}/calibration/"
-    
+
     for _ in range(timeout):
         r = safe_get_json(url)
         if r is None:
             print("Error: Could not retrieve calibration status.")
             return None
 
-        # Calibration is ready
         if "ra" in r:
             return r
 
         time.sleep(2)
 
     return None
+
 
 
 def apply_calibration_to_fits(input_fits, output_fits, job_id):
@@ -462,7 +463,11 @@ def magnitudes(csv_file, green_image, red_image, n, RA, DEC):
 
 
     col_length = len(data['ra'])
-    calibration_num = random.sample(range(0, col_length - 1), n)
+
+    # Ensure n never exceeds available stars
+    n = min(n, col_length)
+
+    calibration_num = random.sample(range(col_length), n)
     calibration_num = sorted(calibration_num)
     print (f"Calibration numbers: {calibration_num}")
 
@@ -496,6 +501,61 @@ def magnitudes(csv_file, green_image, red_image, n, RA, DEC):
             r = np.append(r, data['mag_r'][i])
 
             j += 1
+
+    # === Visualize RED WCS solution ===
+    hdul_r = fits.open(red_image)
+    image_data_r = hdul_r[0].data
+    vmin_r, vmax_r = np.percentile(image_data_r, [5, 99])
+
+    fig = plt.figure(figsize=(10,8))
+    ax = plt.subplot(projection=w_r)
+    ax.imshow(image_data_r, cmap="gray", origin="lower", vmin=vmin_r, vmax=vmax_r)
+
+    # Plot calibration stars
+    ax.scatter(x_pixel_r, y_pixel_r, s=80, edgecolor='cyan', facecolor='none', linewidth=0.8, label="Calibration stars")
+
+    # Plot target object
+    target_r_x, target_r_y = w_r.all_world2pix(RA, DEC, 1)
+    target_circle_r = plt.Circle((target_r_x, target_r_y), 25,
+                                edgecolor='black', facecolor='none',
+                                linewidth=0.8)
+    ax.add_patch(target_circle_r)
+    ax.text(target_r_x + 10, target_r_y + 10, "Target", color='black')
+
+    plt.title("RED WCS Check: APASS stars + Target")
+    plt.xlabel("RA")
+    plt.ylabel("Dec")
+    plt.legend()
+
+    red_wcs_path = "static/red_wcs_check.png"
+    plt.savefig(red_wcs_path, dpi=150, bbox_inches="tight")
+    plt.close()
+
+
+    vmin, vmax = np.percentile(image_data, [5, 99])
+    fig = plt.figure(figsize=(10,8))
+    ax = plt.subplot(projection=w_g)
+    ax.imshow(image_data, cmap="gray", origin="lower", vmin=vmin, vmax=vmax)
+
+    # Plot calibration stars
+    ax.scatter(x_pixel_g, y_pixel_g, s=50, edgecolor='red', facecolor='none', label="Calibration stars")
+
+    # Plot target object
+    target_g_x, target_g_y = w_g.all_world2pix(RA, DEC, 1)
+    target_circle_g = plt.Circle((target_g_x, target_g_y), 25,
+                                edgecolor='black', facecolor='none',
+                                linewidth=0.8)
+    ax.add_patch(target_circle_g)
+    ax.text(target_g_x + 10, target_g_y + 10, "Target", color='black')
+
+    plt.title("GREEN WCS Check: APASS stars + Target")
+    plt.xlabel("RA")
+    plt.ylabel("Dec")
+    plt.legend()
+
+    green_wcs_path = "static/green_wcs_check.png"
+    plt.savefig(green_wcs_path, dpi=150, bbox_inches="tight")
+    plt.close()
 
 
     # === 1. Remove APASS stars outside the image ===
@@ -583,6 +643,25 @@ def magnitudes(csv_file, green_image, red_image, n, RA, DEC):
     
     # Y2
     g_offset = g - inst_g
+
+
+
+    # ============================================
+    # LIMIT TO n CALIBRATION STARS *AFTER MATCHING*
+    # ============================================
+
+    total = len(inst_g)
+    n = min(n, total)
+
+    chosen = np.random.choice(total, n, replace=False)
+
+    inst_g = inst_g[chosen]
+    inst_r = inst_r[chosen]
+    inst_g_r = inst_g_r[chosen]
+    st_g_r = st_g_r[chosen]
+    g_offset = g_offset[chosen]
+    g = g[chosen]
+    r = r[chosen]
 
     ##Specifically solving for the target object now.
 
@@ -676,18 +755,20 @@ def magnitudes(csv_file, green_image, red_image, n, RA, DEC):
 
     
     return (
-        standard_g_target, 
-        standard_r_target, 
+        standard_g_target[0], 
+        standard_r_target[0], 
         error_g, 
         error_r, 
-        calibration_num, 
         Tgr, 
         Cgr,
         Tg,
         Cg,
         color_term_path,
-        green_offset_path
+        green_offset_path,
+        red_wcs_path,
+        green_wcs_path
     )
+
 
 
 
@@ -1176,6 +1257,14 @@ def object_calibration():
     green_offset_path = None
 
 
+    red_wcs_path = None
+    green_wcs_path = None
+    color_term_path = None
+    green_offset_path = None
+
+    ra_deg = None
+    dec_deg = None
+
     upload_folder = "uploads" 
     os.makedirs(upload_folder, exist_ok=True)
 
@@ -1184,6 +1273,10 @@ def object_calibration():
         user_text = request.form.get("calibration_input")
 
         
+        calibration_mode = request.form.get("calibration_mode")
+        calibration_count = request.form.get("calibration_count")
+
+
 
         # Both-input case
         g_text = request.form.get("g_link_both")
@@ -1221,27 +1314,25 @@ def object_calibration():
                 error_message="Please enter RA/Dec in either decimal or HMS/DMS format."
 
             )
-    
-
-
-
         
 
+ 
+
     if g_file and g_file.filename.strip():
-        g_path = os.path.join(upload_folder, g_file.filename)
+        g_path = os.path.join(upload_folder, "uploaded_green.fits")
         g_file.save(g_path)
 
     if r_file and r_file.filename.strip():
-        r_path = os.path.join(upload_folder, r_file.filename)
+        r_path = os.path.join(upload_folder, "uploaded_red.fits")
         r_file.save(r_path)
 
 
     # If user uploaded files, use those
     if g_path and r_path:
-        #full_calibration_with_subid(g_path, "wcs_green_solution.fits", os.environ.get("GREEN_SUBID"))
-        #num_rows = full_calibration_with_subid(r_path, "wcs_red_solution.fits", os.environ.get("RED_SUBID"))
-        full_calibration(g_path, "wcs_green_solution.fits")
-        num_rows =full_calibration(r_path, "wcs_red_solution.fits")
+        full_calibration_with_subid(g_path, "wcs_green_solution.fits", os.environ.get("GREEN_SUBID"))
+        num_rows = full_calibration_with_subid(r_path, "wcs_red_solution.fits", os.environ.get("RED_SUBID"))
+        #full_calibration(g_path, "wcs_green_solution.fits")
+        #num_rows =full_calibration(r_path, "wcs_red_solution.fits")
 
         # ============================
         # CHECK IF TARGET IS IN IMAGE
@@ -1257,6 +1348,18 @@ def object_calibration():
             # Convert RA/Dec to pixel coordinates
             tx, ty = w_g.all_world2pix(ra_deg, dec_deg, 1)
 
+
+            if calibration_mode == "custom":
+                try:
+                    n = int(calibration_count)
+                    n = max(1, n)  # at least 1
+                    num_rows = min(n, num_rows)  # cannot exceed available stars
+                except:
+                    num_rows = num_rows
+            else:
+                num_rows = num_rows
+
+
             # Out-of-bounds check
             if tx < 0 or tx >= nx or ty < 0 or ty >= ny:
                 return render_template(
@@ -1265,7 +1368,7 @@ def object_calibration():
                 )
 
 
-        standard_g_target, standard_r_target, error_g, error_r, calibration_num = magnitudes(
+        standard_g_target, standard_r_target, error_g, error_r, Tgr, Cgr, Tg, Cg, color_term_path, green_offset_path, red_wcs_path, green_wcs_path= magnitudes(
             "apass_subset.csv",
             "wcs_green_solution.fits",
             "wcs_red_solution.fits",
@@ -1276,10 +1379,10 @@ def object_calibration():
 
     # If user typed paths instead, use those
     elif g_text and r_text:
-        #full_calibration_with_subid(g_text, "wcs_green_solution.fits", os.environ.get("GREEN_SUBID"))
-        #num_rows = full_calibration_with_subid(r_text, "wcs_red_solution.fits", os.environ.get("RED_SUBID"))
-        full_calibration(g_text, "wcs_green_solution.fits")
-        full_calibration(r_text, "wcs_red_solution.fits")
+        full_calibration_with_subid(g_text, "wcs_green_solution.fits", os.environ.get("GREEN_SUBID"))
+        num_rows = full_calibration_with_subid(r_text, "wcs_red_solution.fits", os.environ.get("RED_SUBID"))
+        #full_calibration(g_text, "wcs_green_solution.fits")
+        #num_rows = full_calibration(r_text, "wcs_red_solution.fits")
 
         # ============================
         # CHECK IF TARGET IS IN IMAGE
@@ -1302,8 +1405,19 @@ def object_calibration():
                     error_message="❌ The target RA/Dec is outside the image boundaries. Please check your coordinates or upload a larger field."
                 )
 
+            
+        if calibration_mode == "custom":
+            try:
+                n = int(calibration_count)
+                n = max(1, n)  # at least 1
+                num_rows = min(n, num_rows)  # cannot exceed available stars
+            except:
+                num_rows = num_rows
+        else:
+            num_rows = num_rows
 
-        standard_g_target, standard_r_target, error_g, error_r, calibration_num, Tgr, Cgr, Tg, Cg, color_term_path, green_offset_path = magnitudes(
+
+        standard_g_target, standard_r_target, error_g, error_r, Tgr, Cgr, Tg, Cg, color_term_path, green_offset_path, red_wcs_path, green_wcs_path = magnitudes(
             "apass_subset.csv",
             "wcs_green_solution.fits",
             "wcs_red_solution.fits",
@@ -1323,7 +1437,11 @@ def object_calibration():
         Tg=Tg,
         Cg=Cg,
         color_term_path=color_term_path,
-        green_offset_path=green_offset_path
+        green_offset_path=green_offset_path, 
+        red_wcs_path=red_wcs_path, 
+        green_wcs_path=green_wcs_path, 
+        ra_deg=ra_deg, 
+        dec_deg=dec_deg
     )
 
 
@@ -1345,6 +1463,8 @@ def star_cluster_calibration():
     ra_deg = None
     dec_deg = None
     cluster_radius_arcmin = None
+
+
 
     upload_folder = "uploads"
     os.makedirs(upload_folder, exist_ok=True)
@@ -1448,7 +1568,6 @@ def star_cluster_calibration():
 
             #full_calibration(green_image, "wcs_green_solution.fits")
             #full_calibration(red_image, "wcs_red_solution.fits")
-
             full_calibration_with_subid(green_image, "wcs_green_solution.fits", os.environ.get("GREEN_SUBID_SC"))
             full_calibration_with_subid(red_image, "wcs_red_solution.fits", os.environ.get("RED_SUBID_SC"))
 
