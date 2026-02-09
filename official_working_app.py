@@ -1329,8 +1329,8 @@ def object_calibration():
 
     # If user uploaded files, use those
     if g_path and r_path:
-        full_calibration_with_subid(g_path, "wcs_green_solution.fits", os.environ.get("GREEN_SUBID"))
-        num_rows = full_calibration_with_subid(r_path, "wcs_red_solution.fits", os.environ.get("RED_SUBID"))
+        full_calibration_with_subid(g_path, "wcs_green_solution.fits", os.environ.get("GREEN_SUBID")) 
+        num_rows = full_calibration_with_subid(r_path, "wcs_red_solution.fits", os.environ.get("RED_SUBID")) 
         #full_calibration(g_path, "wcs_green_solution.fits")
         #num_rows =full_calibration(r_path, "wcs_red_solution.fits")
 
