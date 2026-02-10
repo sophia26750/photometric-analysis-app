@@ -1,4 +1,5 @@
 from flask import Flask, render_template, request
+from flask import redirect
 
 import requests
 import json
@@ -16,6 +17,7 @@ from astropy.coordinates import SkyCoord
 from astropy.table import Table
 from astropy.io import ascii
 import astropy.units as u
+from astropy.time import Time
 
 from photutils.aperture import CircularAperture, CircularAnnulus, aperture_photometry
 from astropy.stats import SigmaClip
@@ -1230,6 +1232,8 @@ def home():
 
 @app.route("/object_calibration", methods=["GET", "POST"])
 def object_calibration():
+    global last_g, last_r, last_err_g, last_err_r, last_ra, last_dec
+    
     user_text = None
     g_text = None
     r_text = None
@@ -1425,6 +1429,15 @@ def object_calibration():
             ra_deg,
             dec_deg
         )
+
+    
+
+    last_g = standard_g_target
+    last_r = standard_r_target
+    last_err_g = error_g
+    last_err_r = error_r
+    last_ra = ra_deg
+    last_dec = dec_deg
 
     return render_template(
         "object_calibration.html",
@@ -1666,9 +1679,50 @@ def status():
     return status_message
 
 
+
+@app.route("/calculate_jd", methods=["POST"])
+def calculate_jd():
+    date_str = request.form.get("obs_date")  # YYYY-MM-DD
+    time_str = request.form.get("obs_time")  # HH:MM:SS
+
+    if not date_str or not time_str:
+        jd = None
+    else:
+        t = Time(f"{date_str} {time_str}", format="iso", scale="utc")
+        jd = t.jd
+
+    global last_jd
+    last_jd = jd
+
+    return redirect("/aavso_instructions")
+
 @app.route("/aavso_instructions")
 def aavso_instructions():
-    return render_template("submit_instructions.html")
+
+    # Global storage for last calibration results
+    last_g = None
+    last_r = None
+    last_err_g = None
+    last_err_r = None
+    last_ra = None
+    last_dec = None
+    last_jd = None
+
+    return render_template(
+        "submit_instructions.html",
+        g_mag=last_g,
+        r_mag=last_r,
+        err_g=last_err_g,
+        err_r=last_err_r,
+        ra=last_ra,
+        dec=last_dec,
+        jd=last_jd if 'last_jd' in globals() else None
+    )
+
+
+
+
+
 
 
 

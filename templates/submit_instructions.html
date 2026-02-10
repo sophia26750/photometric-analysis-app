@@ -109,8 +109,35 @@
             font-size: 18px;
             opacity: 0.7;
         }
+
+        .copy-btn {
+            margin-left: 12px;
+            padding: 4px 10px;
+            font-size: 14px;
+            background-color: #222;
+            color: #f2f2f2;
+            border: 1px solid #444;
+            border-radius: 6px;
+            cursor: pointer;
+            transition: 0.2s ease;
+        }
+
+        .copy-btn:hover {
+            background-color: #333;
+        }
+
     </style>
 </head>
+
+
+<script>
+function copyToClipboard(text) {
+    navigator.clipboard.writeText(text).then(function() {
+        alert("Copied: " + text);
+    });
+}
+</script>
+
 
 <body>
 
@@ -196,6 +223,40 @@
 
     </ol>
 
+    <!-- END OF STEP 3 -->
+
+    <hr style="border:0; border-top:1px solid #333; margin:50px 0;">
+
+    <h2>Convert Your Observation Date to Julian Date</h2>
+
+    <p style="opacity:0.9; font-size:20px;">
+        Enter the date and time you took your image.  
+        This will automatically convert it to Julian Date for AAVSO submission.
+    </p>
+
+    <form action="/calculate_jd" method="POST" style="margin-top:20px;">
+
+        <label style="font-size:18px;">Observation Date (YYYY-MM-DD):</label><br>
+        <input type="text" name="obs_date" placeholder="2026-02-10"
+            style="padding:10px; width:250px; margin-bottom:15px; border-radius:6px; border:1px solid #444; background:#111; color:#f2f2f2;"><br>
+
+        <label style="font-size:18px;">Observation Time (HH:MM:SS UTC):</label><br>
+        <input type="text" name="obs_time" placeholder="03:15:00"
+            style="padding:10px; width:250px; margin-bottom:20px; border-radius:6px; border:1px solid #444; background:#111; color:#f2f2f2;"><br>
+
+        <button type="submit"
+                style="padding:12px 28px; background:white; color:black; font-size:18px; border-radius:8px; font-weight:bold; cursor:pointer;">
+            Convert to JD
+        </button>
+    </form>
+
+    {% if jd is not none %}
+        <div class="highlight-box" style="margin-top:30px; font-size:20px;">
+            <strong>Your Julian Date:</strong> {{ jd }}
+        </div>
+    {% endif %}
+
+    <!-- BEGIN STEP 4 -->
 
 
     <h2>4. Fill Out the Submission Form</h2>
@@ -204,53 +265,66 @@
 
     <ul style="font-size:20px; line-height:1.7; opacity:0.9;">
 
+        <!-- Observation Type -->
         <li><strong>Observation Type:</strong> CCD</li>
 
+        <!-- Target Name -->
         <li><strong>Target Name:</strong> (e.g., Bellatrix)</li>
 
-        <li><strong>Observation Time:</strong>  
-            Enter your Julian Date (JD) exactly as your website outputs it.
+        <!-- JD -->
+        <li><strong>Observation Time (JD):</strong>
+            {% if jd %}
+                <span style="color:#7ab8ff;">{{ jd }}</span>
+                <button class="copy-btn" onclick="copyToClipboard('{{ jd }}')">Copy</button>
+            {% else %}
+                <span style="color:#888;">You have not calculated the Julian Date yet.</span>
+            {% endif %}
         </li>
 
-        <li><strong>Magnitude:</strong>  
-            Your calibrated g or r magnitude.
+        <!-- Green Magnitude -->
+        <li><strong>Magnitude (Green g):</strong>
+            {% if g_mag %}
+                <span style="color:#7ab8ff;">{{ g_mag }} ± {{ err_g }}</span>
+                <button class="copy-btn" onclick="copyToClipboard('{{ g_mag }}')">Copy</button>
+            {% else %}
+                <span style="color:#888;">You have not run the program yet.</span>
+            {% endif %}
         </li>
 
-        <li><strong>Magnitude Error:</strong>  
-            The uncertainty from your pipeline.
+        <!-- Red Magnitude -->
+        <li><strong>Magnitude (Red r):</strong>
+            {% if r_mag %}
+                <span style="color:#7ab8ff;">{{ r_mag }} ± {{ err_r }}</span>
+                <button class="copy-btn" onclick="copyToClipboard('{{ r_mag }}')">Copy</button>
+            {% else %}
+                <span style="color:#888;">You have not run the program yet.</span>
+            {% endif %}
         </li>
 
-        <li><strong>Chart ID:</strong>  
-            From your AAVSO chart (top‑right corner).
+        <!-- Chart ID -->
+        <li><strong>Chart ID:</strong> from your AAVSO chart</li>
+
+        <!-- Comp Star -->
+        <li><strong>Comparison Star Label:</strong> from chart</li>
+
+        <!-- Check Star -->
+        <li><strong>Check Star Label:</strong> from chart</li>
+
+        <!-- RA/DEC -->
+        <li><strong>RA/DEC of Target:</strong>
+            {% if ra and dec %}
+                <span style="color:#7ab8ff;">RA: {{ ra }}°, DEC: {{ dec }}°</span>
+                <button class="copy-btn" onclick="copyToClipboard('{{ ra }} {{ dec }}')">Copy</button>
+            {% else %}
+                <span style="color:#888;">You have not run the program yet.</span>
+            {% endif %}
         </li>
 
-        <li><strong>Comparison Star Label:</strong>  
-            The label printed on the chart (e.g., 123 → 12.3).
-        </li>
+        <!-- Filters -->
+        <li><strong>Filters:</strong> TG, TR, V, etc.</li>
 
-        <li><strong>Comparison Star Magnitude:</strong>  
-            Leave blank unless you are NOT using ensemble photometry.
-        </li>
-
-        <li><strong>Check Star Label:</strong>  
-            The label printed on the chart.
-        </li>
-
-        <li><strong>Check Star Magnitude:</strong>  
-            Leave blank unless you are NOT using ensemble photometry.
-        </li>
-
-        <li><strong>Filters:</strong>  
-            TG, TR, V, etc. (whatever filter your calibrated magnitude corresponds to).
-        </li>
-
-        <li><strong>Comment Codes:</strong>  
-            Optional — select any that apply.
-        </li>
-
-        <li><strong>Comments:</strong>  
-            Optional but recommended (e.g., “Calibrated using APASS DR10 stars”).
-        </li>
+        <!-- Comments -->
+        <li><strong>Comments:</strong> optional but recommended</li>
 
     </ul>
 
@@ -258,14 +332,15 @@
         Press <strong>Continue</strong> when finished.
     </p>
 
-<p style="font-size:20px; line-height:1.7; opacity:0.9;">
-    <strong>After you press Continue:</strong>  
-    WebObs will show a full preview of your submission.  
-    Review every field carefully — JD, magnitude, error, filter, comp/check stars, and comments.  
-    If something needs correction, you can go back and edit it.  
-    If everything looks correct, press <strong>Submit Observation</strong>.  
-    Your measurement is immediately added to the AAVSO International Database.
-</p>
+    <p style="font-size:20px; line-height:1.7; opacity:0.9;">
+        <strong>After you press Continue:</strong>  
+        WebObs will show a full preview of your submission.  
+        Review every field carefully — JD, magnitude, error, filter, comp/check stars, and comments.  
+        If something needs correction, you can go back and edit it.  
+        If everything looks correct, press <strong>Submit Observation</strong>.  
+        Your measurement is immediately added to the AAVSO International Database.
+    </p>
+
 
 
     <h2>5. Submit the Observation</h2>
@@ -285,6 +360,8 @@
     <p class="footer-note">Thank you for contributing to the AAVSO and supporting global variable star research.</p>
 
 </div>
+
+
 
 </body>
 </html>
