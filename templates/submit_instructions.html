@@ -1,0 +1,290 @@
+<!DOCTYPE html>
+<html>
+<head>
+    <title>AAVSO Submission Guide</title>
+    <style>
+        body {
+            background-color: #000;
+            margin: 0;
+            padding: 0;
+            font-family: Arial, Helvetica, sans-serif;
+            color: #f2f2f2;
+        }
+
+        .container {
+            max-width: 900px;
+            margin: 0 auto;
+            padding: 80px 20px;
+            text-align: left;
+        }
+
+        h1 {
+            font-size: 50px;
+            margin-bottom: 10px;
+            font-weight: 700;
+            text-align: center;
+        }
+
+        .subtitle {
+            text-align: center;
+            font-size: 22px;
+            margin-bottom: 40px;
+            opacity: 0.85;
+        }
+
+        h2 {
+            font-size: 32px;
+            margin-top: 50px;
+            margin-bottom: 15px;
+            font-weight: 500;
+            color: #e6e6e6;
+        }
+
+        h3 {
+            font-size: 24px;
+            margin-top: 25px;
+            margin-bottom: 10px;
+            font-weight: 400;
+            color: #dcdcdc;
+        }
+
+        p {
+            font-size: 20px;
+            line-height: 1.7;
+            margin-bottom: 20px;
+            opacity: 0.9;
+        }
+
+        ul {
+            margin-top: 10px;
+            margin-bottom: 25px;
+            padding-left: 20px;
+        }
+
+        li {
+            font-size: 19px;
+            margin-bottom: 8px;
+            opacity: 0.9;
+        }
+
+        a {
+            color: #7ab8ff;
+            text-decoration: none;
+        }
+
+        a:hover {
+            text-decoration: underline;
+        }
+
+        .highlight-box {
+            background-color: #111;
+            border: 1px solid #333;
+            padding: 25px;
+            border-radius: 10px;
+            margin-bottom: 40px;
+            box-shadow: 0 0 20px rgba(255,255,255,0.05);
+            font-size: 19px;
+        }
+
+        .home-button {
+            display: inline-block;
+            margin-top: 50px;
+            padding: 16px 32px;
+            background-color: white;
+            color: black;
+            font-size: 20px;
+            border-radius: 8px;
+            text-decoration: none;
+            font-weight: bold;
+            transition: 0.3s ease;
+        }
+
+        .home-button:hover {
+            background-color: #dcdcdc;
+        }
+
+        .footer-note {
+            margin-top: 60px;
+            text-align: center;
+            font-size: 18px;
+            opacity: 0.7;
+        }
+    </style>
+</head>
+
+<body>
+
+<div class="container">
+
+    <h1>AAVSO Submission Guide</h1>
+    <p class="subtitle">How to submit your calibrated photometry to the AAVSO International Database</p>
+
+    <div class="highlight-box">
+        <strong>Your photometry pipeline already produces everything required for AAVSO submission:</strong>
+        calibrated magnitudes, uncertainties, RA/Dec, and WCS‑verified photometry.
+    </div>
+
+    <h2>1. Prepare Your Photometric Results</h2>
+    <p>You will need:</p>
+    <ul>
+        <li>Calibrated g and r magnitudes</li>
+        <li>Magnitude uncertainties</li>
+        <li>RA/Dec of the target</li>
+        <li>Your AAVSO observer code</li>
+    </ul>
+
+    <h2>2. Generate an AAVSO Finder Chart</h2>
+    <p>Use the AAVSO Variable Star Plotter (VSP):</p>
+    <ul>
+        <li>Go to <a href="https://www.aavso.org/vsp" target="_blank">https://www.aavso.org/vsp</a></li>
+        <li>Enter your target name or RA/Dec</li>
+        <li>Select Chart Scale: <strong>E</strong></li>
+        <li>Orientation: <strong>CCD</strong></li>
+        <li>Chart or Photometry: <strong>Chart</strong></li>
+        <li>Leave “Chart ID” blank unless reproducing an old chart</li>
+    </ul>
+
+    <p>After generating the chart, record:</p>
+    <ul>
+        <li><strong>Chart ID</strong> (top‑right corner)</li>
+        <li><strong>Comparison star label</strong> (e.g., 123 → mag 12.3)</li>
+        <li><strong>Check star label</strong></li>
+    </ul>
+
+    <h2>3. Log In to WebObs</h2>
+    <p>Follow these steps to reach the correct AAVSO submission page:</p>
+
+    <ol style="font-size:20px; line-height:1.7; opacity:0.9;">
+
+        <li>
+            Go to 
+            <a href="https://www.aavso.org/webobs" target="_blank">
+                https://www.aavso.org/webobs
+            </a>.
+        </li>
+
+        <li>
+            Scroll until you see the section titled <strong>Submit</strong>.  
+            Under it, click <strong>Individual Observations</strong>.
+        </li>
+
+        <li>
+            Scroll all the way down.  
+            If you are <strong>not logged in</strong>, click <strong>“Click here to login.”</strong><br>
+            If you <strong>are logged in</strong> but do not have an observer code linked to your account, click  
+            <strong>“Click here to get an observer code or link to your old account.”</strong>  
+            (It’s free and automatic.)
+        </li>
+
+        <li>
+            After clicking, you should see a page asking for your observer code.  
+            If instead you see <strong>“Not Found”</strong>, press <strong>Return Home</strong> — it will take you to the correct page.
+        </li>
+
+        <li>
+            On the left‑hand menu, find <strong>Submit Data</strong> and click <strong>Photometry</strong>.
+        </li>
+
+        <li>
+            You will now see two options:
+            <ul>
+                <li><strong>Manual</strong> — best for single observations</li>
+                <li><strong>File Upload</strong> — best for many observations at once</li>
+            </ul>
+            For this website’s workflow, choose <strong>Manual</strong>.
+        </li>
+
+    </ol>
+
+
+
+    <h2>4. Fill Out the Submission Form</h2>
+    <p>Once you select <strong>Manual</strong>, you will see the full CCD submission form.  
+    Fill it out using the values produced by your photometry pipeline:</p>
+
+    <ul style="font-size:20px; line-height:1.7; opacity:0.9;">
+
+        <li><strong>Observation Type:</strong> CCD</li>
+
+        <li><strong>Target Name:</strong> (e.g., Bellatrix)</li>
+
+        <li><strong>Observation Time:</strong>  
+            Enter your Julian Date (JD) exactly as your website outputs it.
+        </li>
+
+        <li><strong>Magnitude:</strong>  
+            Your calibrated g or r magnitude.
+        </li>
+
+        <li><strong>Magnitude Error:</strong>  
+            The uncertainty from your pipeline.
+        </li>
+
+        <li><strong>Chart ID:</strong>  
+            From your AAVSO chart (top‑right corner).
+        </li>
+
+        <li><strong>Comparison Star Label:</strong>  
+            The label printed on the chart (e.g., 123 → 12.3).
+        </li>
+
+        <li><strong>Comparison Star Magnitude:</strong>  
+            Leave blank unless you are NOT using ensemble photometry.
+        </li>
+
+        <li><strong>Check Star Label:</strong>  
+            The label printed on the chart.
+        </li>
+
+        <li><strong>Check Star Magnitude:</strong>  
+            Leave blank unless you are NOT using ensemble photometry.
+        </li>
+
+        <li><strong>Filters:</strong>  
+            TG, TR, V, etc. (whatever filter your calibrated magnitude corresponds to).
+        </li>
+
+        <li><strong>Comment Codes:</strong>  
+            Optional — select any that apply.
+        </li>
+
+        <li><strong>Comments:</strong>  
+            Optional but recommended (e.g., “Calibrated using APASS DR10 stars”).
+        </li>
+
+    </ul>
+
+    <p style="font-size:20px; line-height:1.7; opacity:0.9;">
+        Press <strong>Continue</strong> when finished.
+    </p>
+
+<p style="font-size:20px; line-height:1.7; opacity:0.9;">
+    <strong>After you press Continue:</strong>  
+    WebObs will show a full preview of your submission.  
+    Review every field carefully — JD, magnitude, error, filter, comp/check stars, and comments.  
+    If something needs correction, you can go back and edit it.  
+    If everything looks correct, press <strong>Submit Observation</strong>.  
+    Your measurement is immediately added to the AAVSO International Database.
+</p>
+
+
+    <h2>5. Submit the Observation</h2>
+    <p>Click <strong>Submit Observation</strong>. Your data is now part of the AAVSO International Database.</p>
+
+    <h2>6. Best Practices</h2>
+    <ul>
+        <li>Use transformed magnitudes (your pipeline already does this)</li>
+        <li>Use the same comparison star across nights</li>
+        <li>Submit one entry per filter</li>
+    </ul>
+
+    <div style="text-align:center;">
+        <a href="/" class="home-button">Back to Home</a>
+    </div>
+
+    <p class="footer-note">Thank you for contributing to the AAVSO and supporting global variable star research.</p>
+
+</div>
+
+</body>
+</html>

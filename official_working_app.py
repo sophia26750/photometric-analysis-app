@@ -226,7 +226,7 @@ def query_apass_to_csv(ra_center, dec_center, radius_deg, output_csv="apass_subs
     print(f"Saved {output_csv}")
     num_rows = len(df)
     status_message = f"Saved csv file as {output_csv}..."
-    status_message = f"Done!"
+    status_message = f"Image processing is done! Please wait for Photometry to finish..."
 
     return num_rows - 2
 
@@ -285,7 +285,7 @@ def full_calibration_with_subid(image, wcs_image_name, subid_key):
     radius = round(astro_results["radius"] * 0.55, 1)
 
     num_rows = query_apass_to_csv(ra, dec, radius, "apass_subset.csv")
-    status_message = f"Done!"
+    status_message = f"Image processing is done! Please wait for Photometry to finish..."
     
     return num_rows
 
@@ -333,7 +333,7 @@ def full_calibration(image, wcs_image_name):
     radius = round(astro_results["radius"] * 0.45, 1)
 
     num_rows = query_apass_to_csv(ra, dec, radius, "apass_subset.csv")
-    status_message = f"Done!"
+    status_message = f"Image Processing is done! Please wait for Photometry to finish..."
 
     return num_rows
 
@@ -1665,6 +1665,10 @@ def star_cluster_calibration():
 def status():
     return status_message
 
+
+@app.route("/aavso_instructions")
+def aavso_instructions():
+    return render_template("submit_instructions.html")
 
 
 
