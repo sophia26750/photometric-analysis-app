@@ -421,7 +421,12 @@ def magnitudes(csv_file, green_image, red_image, n, RA, DEC):
 
 
     col_length = len(data['ra'])
-    calibration_num = random.sample(range(0, col_length - 1), n)
+
+    # Ensure n never exceeds available stars
+    n = min(n, col_length)
+
+    calibration_num = random.sample(range(col_length), n)
+
     calibration_num = sorted(calibration_num)
     print (f"Calibration numbers: {calibration_num}")
 
@@ -465,13 +470,24 @@ def magnitudes(csv_file, green_image, red_image, n, RA, DEC):
     ax = plt.subplot(projection=w_r)
     ax.imshow(image_data_r, cmap="gray", origin="lower", vmin=vmin_r, vmax=vmax_r)
 
-    # plot APASS stars (red band)
-    ax.scatter(x_pixel_r, y_pixel_r, s=80, edgecolor='cyan', facecolor='none', linewidth=1.5)
+    # Plot calibration stars
+    ax.scatter(x_pixel_r, y_pixel_r, s=80, edgecolor='cyan', facecolor='none', linewidth=1.5, label="Calibration stars")
 
-    plt.title("RED WCS Check: APASS stars projected onto image")
+    # --- NEW: plot target object ---
+    target_r_x, target_r_y = w_r.all_world2pix(RA, DEC, 1)
+    target_circle_r = plt.Circle((target_r_x, target_r_y), 12,
+                                edgecolor='yellow', facecolor='none',
+                                linewidth=2.5)
+    ax.add_patch(target_circle_r)
+    ax.text(target_r_x + 10, target_r_y + 10, "Target", color='yellow')
+
+    plt.title("RED WCS Check: APASS stars + Target")
     plt.xlabel("RA")
     plt.ylabel("Dec")
+    plt.legend()
     plt.show()
+
+
 
             
     vmin, vmax = np.percentile(image_data, [5, 99])
@@ -479,10 +495,24 @@ def magnitudes(csv_file, green_image, red_image, n, RA, DEC):
     ax = plt.subplot(projection=w_g)
     ax.imshow(image_data, cmap="gray", origin="lower", vmin=vmin, vmax=vmax)
 
-    # plot APASS stars
-    ax.scatter(x_pixel_g, y_pixel_g, s=50, edgecolor='red', facecolor='none')
+    # Plot calibration stars
+    ax.scatter(x_pixel_g, y_pixel_g, s=50, edgecolor='red', facecolor='none', label="Calibration stars")
 
+    # --- NEW: plot target object ---
+    target_g_x, target_g_y = w_g.all_world2pix(RA, DEC, 1)
+    target_circle_g = plt.Circle((target_g_x, target_g_y), 12,
+                                edgecolor='yellow', facecolor='none',
+                                linewidth=2.5)
+    ax.add_patch(target_circle_g)
+    ax.text(target_g_x + 10, target_g_y + 10, "Target", color='yellow')
+
+    plt.title("GREEN WCS Check: APASS stars + Target")
+    plt.xlabel("RA")
+    plt.ylabel("Dec")
+    plt.legend()
     plt.show()
+
+
 
 
     # === 1. Remove APASS stars outside the image ===
@@ -555,6 +585,7 @@ def magnitudes(csv_file, green_image, red_image, n, RA, DEC):
     r = matched["r"][mask]
 
 
+
     valid_flux_g = np.array(valid_flux_g)
     valid_flux_r = np.array(valid_flux_r)
 
@@ -570,6 +601,25 @@ def magnitudes(csv_file, green_image, red_image, n, RA, DEC):
     
     # Y2
     g_offset = g - inst_g
+
+
+    # ============================================
+    # LIMIT TO n CALIBRATION STARS *AFTER MATCHING*
+    # ============================================
+
+    total = len(inst_g)
+    n = min(n, total)
+
+    chosen = np.random.choice(total, n, replace=False)
+
+    inst_g = inst_g[chosen]
+    inst_r = inst_r[chosen]
+    inst_g_r = inst_g_r[chosen]
+    st_g_r = st_g_r[chosen]
+    g_offset = g_offset[chosen]
+    g = g[chosen]
+    r = r[chosen]
+
 
     ##Specifically solving for the target object now.
 
@@ -666,14 +716,14 @@ def magnitudes(csv_file, green_image, red_image, n, RA, DEC):
         ) 
 
 
-#full_calibration_with_subid("/Users/admin/source/yspa-research-code/fits_files/r_july13-t24-mvn-green_stacked.fits", "wcs_green_solution.fits", os.environ.get("GREEN_SUBID")) # "/Users/admin/source/yspa-research-code/fits_files/r_july15-home40-mvn-green-all_stacked.fits"
-#num_rows = full_calibration_with_subid("/Users/admin/source/yspa-research-code/fits_files/r_july13-t24-mvn-red_stacked.fits", "wcs_red_solution.fits", os.environ.get("RED_SUBID"))  #/Users/admin/source/yspa-research-code/fits_files/r_july15-home40-mvn-red-all_stacked.fits"
-#full_calibration("/Users/admin/source/yspa-research-code/fits_files/r_july13-t24-mvn-green_stacked.fits", "wcs_green_solution.fits") 
-#num_rows = full_calibration("/Users/admin/source/yspa-research-code/fits_files/r_july13-t24-mvn-red_stacked.fits", "wcs_red_solution.fits")
+#full_calibration_with_subid("/Users/admin/YSPA-old-things/wcs-sn/r_july13-t24-mvn-green_stacked.fits", "wcs_green_solution.fits", os.environ.get("GREEN_SUBID")) # "/Users/admin/source/yspa-research-code/fits_files/r_july15-home40-mvn-green-all_stacked.fits"
+#num_rows = full_calibration_with_subid("/Users/admin/YSPA-old-things/wcs-sn/r_july13-t24-mvn-red_stacked.fits", "wcs_red_solution.fits", os.environ.get("RED_SUBID"))  #/Users/admin/source/yspa-research-code/fits_files/r_july15-home40-mvn-red-all_stacked.fits"
+#full_calibration("/Users/admin/YSPA-old-things/wcs-sn/r_july13-t24-mvn-green_stacked.fits", "wcs_green_solution.fits") 
+#num_rows = full_calibration("/Users/admin/YSPA-old-things/wcs-sn/r_july13-t24-mvn-red_stacked.fits", "wcs_red_solution.fits")
 
 full_calibration("/Users/admin/YSPA-old-things/wcs-sn/r_july15-home40-mvn-green-all_stacked.fits", "wcs_green_solution.fits") 
 num_rows = full_calibration("/Users/admin/YSPA-old-things/wcs-sn/r_july15-home40-mvn-red-all_stacked.fits", "wcs_red_solution.fits")
-
+num_rows = 15
 print(magnitudes(
     "apass_subset.csv",
     "wcs_green_solution.fits",

@@ -97,6 +97,27 @@
             content: "• ";
             color: #aaa;
         }
+
+        /* Special button for AAVSO submission */
+        .submit-button {
+            display: inline-block;
+            margin: 20px 15px;
+            padding: 16px 32px;
+            background-color: #e6c14a; /* gold */
+            color: #000;
+            font-size: 20px;
+            border-radius: 8px;
+            text-decoration: none;
+            font-weight: bold;
+            transition: 0.3s ease;
+            box-shadow: 0 0 12px rgba(230,193,74,0.4);
+        }
+
+        .submit-button:hover {
+            background-color: #f0d46a;
+            box-shadow: 0 0 18px rgba(230,193,74,0.7);
+        }
+
     </style>
 </head>
 
@@ -142,6 +163,8 @@
 
         <a href="/object_calibration" class="button">Object Calibration</a>
         <a href="/star_cluster_calibration" class="button">Star Cluster Calibration</a>
+        <a href="/aavso_instructions" class="submit-button">Submit Data to AAVSO</a>
+
 
     </div>
 

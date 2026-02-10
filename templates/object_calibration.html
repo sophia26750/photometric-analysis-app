@@ -158,6 +158,36 @@
 
         <hr>
 
+        <h2>Calibration Star Selection</h2>
+
+        <label for="calibration_mode">Choose calibration stars:</label><br>
+        <select name="calibration_mode" id="calibration_mode" 
+                style="padding: 10px; margin: 10px 0 20px 0; font-size: 16px; 
+                    border-radius: 6px; border: 1px solid #444; 
+                    background-color: #000; color: #eee; width: 50%;"
+                onchange="toggleCustomCalibration()">
+            <option value="all">Use all available stars</option>
+            <option value="custom">Choose a custom number</option>
+        </select>
+
+        <br>
+
+        <div id="custom_calibration_block" style="display:none;">
+            <label for="calibration_count">Number of calibration stars:</label><br>
+            <input type="number" name="calibration_count" min="1"
+                style="width: 40%; padding: 10px; margin: 10px 0 20px 0;
+                        font-size: 16px; border-radius: 6px; border: 1px solid #444;
+                        background-color: #000; color: #eee;">
+        </div>
+
+        <script>
+        function toggleCustomCalibration() {
+            const mode = document.getElementById("calibration_mode").value;
+            document.getElementById("custom_calibration_block").style.display =
+                mode === "custom" ? "block" : "none";
+        }
+        </script>
+
 
         <label>Photometric system:</label>
         <select name="phot_system">
@@ -194,6 +224,11 @@
 
     <div id="status-line"></div>
 
+    {% if error_message %}
+        <p class="error">{{ error_message }}</p>
+    {% endif %}
+
+
     <script>
         function pollStatus() {
             fetch("/status")
@@ -217,6 +252,15 @@
     <div class="results-box">
         <h3>Photometric Analysis Results</h3>
 
+        <div style="margin-bottom: 15px; font-size: 18px;">
+            <span style="opacity: 0.85;">Target Coordinates</span><br>
+            <span style="font-size: 20px; color: #9cf;">
+                RA: {{ ra_deg }}°<br>
+                Dec: {{ dec_deg }}°
+            </span>
+        </div>
+
+
         Standard g Magnitude: {{ standard_g_target }}<br>
         Standard r Magnitude: {{ standard_r_target }}<br>
         Error in g: {{ error_g }}<br>
@@ -232,6 +276,33 @@
     </div>
     {% endif %}
 
+    <div style="margin-top:40px;">
+        <a href="/aavso_instructions"
+        style="display:inline-block; padding:14px 30px; 
+                background:#1a1a1a; border:1px solid #555;
+                border-radius:8px; color:#fff; font-size:20px;
+                text-decoration:none; font-weight:bold;
+                transition:0.2s ease;">
+            Submit Data to AAVSO →
+        </a>
+    </div>
+
+    {% if red_wcs_path %}
+    <div class="plot-card">
+        <h3>Red WCS Check</h3>
+        <img src="{{ url_for('static', filename=red_wcs_path.split('/')[-1]) }}">
+    </div>
+    {% endif %}
+
+    {% if green_wcs_path %}
+    <div class="plot-card">
+        <h3>Green WCS Check</h3>
+        <img src="{{ url_for('static', filename=green_wcs_path.split('/')[-1]) }}">
+    </div>
+    {% endif %}
+
+
+
     {% if color_term_path %}
     <div class="plot-card">
         <h3>Color Calibration Plot</h3>
@@ -245,6 +316,23 @@
         <img src="{{ url_for('static', filename=green_offset_path.split('/')[-1]) }}">
     </div>
     {% endif %}
+
+    <br><br>
+    <br><br>
+  
+
+    
+
+    <br><br>
+    <br><br>
+    <br><br>
+    <br><br>
+    <br><br>
+    <br><br>
+    <br><br>
+    <br><br>
+
+
 
 </body>
 </html>
