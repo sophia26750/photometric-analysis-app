@@ -126,6 +126,24 @@
             background-color: #333;
         }
 
+        .plot-card {
+            width: 70%;
+            margin: 40px auto;
+            padding: 20px;
+            background-color: #111;
+            border: 1px solid #333;
+            border-radius: 12px;
+            box-shadow: 0 0 15px rgba(255,255,255,0.08);
+        }
+
+        .plot-card img {
+            width: 90%;
+            border-radius: 6px;
+            border: 1px solid #555;
+            box-shadow: 0 0 12px rgba(255,255,255,0.15);
+        }
+
+
     </style>
 </head>
 
@@ -160,15 +178,47 @@ function copyToClipboard(text) {
         <li>Your AAVSO observer code</li>
     </ul>
 
+
+    <hr>
+
     <h2>2. Generate an AAVSO Finder Chart</h2>
     <p>Use the AAVSO Variable Star Plotter (VSP):</p>
     <ul>
         <li>Go to <a href="https://www.aavso.org/vsp" target="_blank">https://www.aavso.org/vsp</a></li>
-        <li>Enter your target name or RA/Dec</li>
+        <li>
+            Enter your target name or RA/Dec  
+            {% if ra_hms and dec_dms %}
+                <div style="margin-top:10px; font-size:18px;">
+
+                    <strong style="color:#7ab8ff;">RA (HH:MM:SS):</strong> {{ ra_hms }}
+                    <button class="copy-btn" onclick="copyToClipboard('{{ ra_hms }}')">Copy</button>
+                    <br>
+
+                    <strong style="color:#7ab8ff;">Dec (DD:MM:SS):</strong> {{ dec_dms }}
+                    <button class="copy-btn" onclick="copyToClipboard('{{ dec_dms }}')">Copy</button>
+
+                    <p style="opacity:0.7; margin-top:8px;">
+                        These coordinates were automatically converted from your target’s RA/Dec.
+                    </p>
+                </div>
+            {% else %}
+                <div style="margin-top:10px; font-size:18px; color:#888;">
+                    (Coordinates will appear here after running photometry.)
+                </div>
+            {% endif %}
+        </li>
+
         <li>Select Chart Scale: <strong>E</strong></li>
         <li>Orientation: <strong>CCD</strong></li>
         <li>Chart or Photometry: <strong>Chart</strong></li>
         <li>Leave “Chart ID” blank unless reproducing an old chart</li>
+        <li>Press Plot Chart</li>
+
+        <div class="plot-card">
+            <h3>Here is an example of how you should input your information into "Plot a Quick Chart"</h3>
+            <img src="{{ url_for('static', filename='AAVSO_1.jpg') }}">
+        </div>
+
     </ul>
 
     <p>After generating the chart, record:</p>
@@ -177,6 +227,21 @@ function copyToClipboard(text) {
         <li><strong>Comparison star label</strong> (e.g., 123 → mag 12.3)</li>
         <li><strong>Check star label</strong></li>
     </ul>
+
+    <div class="plot-card">
+        <h3>This is what it should look like. Notice how there are no numbers IN the box with dots, if this happens, change "Chart Scale: E" to D. If you still can't find any numbers, keep going up until A.</h3>
+        <img src="{{ url_for('static', filename='AAVSO_2.jpg') }}">
+
+        <br><br>
+
+        <h3>This is when I increased the chart scale from E to C, notice how now there are 2 stars that has numerical values? Those will be your STAR LABELS. You need at least TWO.</h3>
+        <img src="{{ url_for('static', filename='AAVSO_3.jpg') }}">
+
+    </div>
+
+
+    <hr>
+
 
     <h2>3. Log In to WebObs</h2>
     <p>Follow these steps to reach the correct AAVSO submission page:</p>
@@ -251,13 +316,20 @@ function copyToClipboard(text) {
     </form>
 
     {% if jd is not none %}
-        <div class="highlight-box" style="margin-top:30px; font-size:20px;">
+        <div class="highlight-box" style="margin-top:30px; font-size:20px; border-left:5px solid #4caf50;">
+            <strong style="color:#4caf50;">Success!</strong>  
+            Your Julian Date has been calculated.
+            <br><br>
             <strong>Your Julian Date:</strong> {{ jd }}
+            <br>
+            <span style="opacity:0.8;">Scroll down to Step 4 to copy it into WebObs.</span>
         </div>
     {% endif %}
 
+
     <!-- BEGIN STEP 4 -->
 
+    <hr>
 
     <h2>4. Fill Out the Submission Form</h2>
     <p>Once you select <strong>Manual</strong>, you will see the full CCD submission form.  
@@ -281,31 +353,78 @@ function copyToClipboard(text) {
             {% endif %}
         </li>
 
-        <!-- Green Magnitude -->
-        <li><strong>Magnitude (Green g):</strong>
+
+        <div style="background:#330000; border-left:6px solid #ff4444; padding:15px; margin:25px 0; font-size:20px;">
+            <strong style="color:#ff7777;">IMPORTANT NOTE:</strong><br>
+            AAVSO only allows <strong>one filter per submission. (It will ask you to input ONE magnitude)</strong>.  
+            This means you must submit your <strong>Green (g)</strong> and <strong>Red (r)</strong> measurements 
+            as <em>separate</em> entries.
+            <br><br>
+            <strong style="color:#ff9999;">If you choose to submit the Green magnitude, then the filter you select in WebObs must be <u>Green (TG)</u>.</strong><br>
+            <strong style="color:#ff9999;">If you choose to submit the Red magnitude, then the filter you select must be <u>Red (TR)</u>.</strong>
+            <br><br>
+            Submitting the wrong filter will cause your observation to be rejected or scientifically unusable.
+        </div>
+
+         <!-- For green -->
+        <li><strong>Magnitude (For Green g):</strong>
             {% if g_mag %}
-                <span style="color:#7ab8ff;">{{ g_mag }} ± {{ err_g }}</span>
+                <span style="color:#7ab8ff;">{{ g_mag }}</span>
                 <button class="copy-btn" onclick="copyToClipboard('{{ g_mag }}')">Copy</button>
             {% else %}
                 <span style="color:#888;">You have not run the program yet.</span>
             {% endif %}
         </li>
 
-        <!-- Red Magnitude -->
-        <li><strong>Magnitude (Red r):</strong>
+        <li><strong>Error g:</strong>
+            {% if err_g %}
+                <span style="color:#7ab8ff;">{{ err_g }}</span>
+                <button class="copy-btn" onclick="copyToClipboard('{{ err_g }}')">Copy</button>
+            {% else %}
+                <span style="color:#888;">You have not run the program yet.</span>
+            {% endif %}
+        </li>
+        
+        <!-- For red -->
+        <li><strong>Magnitude (For Red r):</strong>
             {% if r_mag %}
-                <span style="color:#7ab8ff;">{{ r_mag }} ± {{ err_r }}</span>
+                <span style="color:#7ab8ff;">{{ r_mag }}</span>
                 <button class="copy-btn" onclick="copyToClipboard('{{ r_mag }}')">Copy</button>
             {% else %}
                 <span style="color:#888;">You have not run the program yet.</span>
             {% endif %}
         </li>
 
-        <!-- Chart ID -->
-        <li><strong>Chart ID:</strong> from your AAVSO chart</li>
+        <li><strong>Error r:</strong>
+            {% if err_r %}
+                <span style="color:#7ab8ff;">{{ err_r }}</span>
+                <button class="copy-btn" onclick="copyToClipboard('{{ err_r }}')">Copy</button>
+            {% else %}
+                <span style="color:#888;">You have not run the program yet.</span>
+            {% endif %}
+        </li>
 
-        <!-- Comp Star -->
-        <li><strong>Comparison Star Label:</strong> from chart</li>
+
+
+        <li><strong>Chart ID:</strong>
+            This is the identifier you found in step 2. It was printed in the upper‑right corner of your AAVSO finder chart  
+            (example: <em>X25678E</em>).  
+            It tells AAVSO exactly which chart you used.
+        </li>
+
+        <li><strong>Comparison Star Label:</strong>
+            On your AAVSO chart, comparison stars are marked with numbers like  
+            <em>123</em>, <em>98</em>, <em>104</em>, etc.  
+            These numbers represent their magnitudes (e.g., “123” means 12.3).  
+            Choose the comparison star you used for your photometry and enter its label here.
+        </li>
+
+        <li><strong>Check Star Label:</strong>
+            This is another labeled star on the same chart, used to verify your measurement.  
+            It is chosen the same way as the comparison star — look for a number label such as  
+            <em>110</em> or <em>128</em> and enter it here.
+        </li>
+
 
         <!-- Check Star -->
         <li><strong>Check Star Label:</strong> from chart</li>
@@ -326,6 +445,14 @@ function copyToClipboard(text) {
         <!-- Comments -->
         <li><strong>Comments:</strong> optional but recommended</li>
 
+
+
+        <div class="plot-card">
+            <h3>This is what your inputs should look like! </h3>
+            <img src="{{ url_for('static', filename='AAVSO_4.jpg') }}">
+        </div>
+
+
     </ul>
 
     <p style="font-size:20px; line-height:1.7; opacity:0.9;">
@@ -341,10 +468,16 @@ function copyToClipboard(text) {
         Your measurement is immediately added to the AAVSO International Database.
     </p>
 
-
+    <hr>
 
     <h2>5. Submit the Observation</h2>
     <p>Click <strong>Submit Observation</strong>. Your data is now part of the AAVSO International Database.</p>
+
+        <div class="plot-card">
+            <h3>Press that SUBMIT! </h3>
+            <img src="{{ url_for('static', filename='AAVSO_5.jpg') }}">
+        </div>
+    <hr>
 
     <h2>6. Best Practices</h2>
     <ul>

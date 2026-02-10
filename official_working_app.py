@@ -38,7 +38,19 @@ matplotlib.use("Agg")
 from photutils.detection import DAOStarFinder
 
 global status_message
+global last_jd
 status_message = "Waiting for user input..."
+last_g = None
+last_r = None
+last_err_g = None
+last_err_r = None
+last_ra = None
+last_dec = None
+last_jd = None
+last_ra_hms = None
+last_dec_dms = None
+
+
 
 
 def login_to_astrometry(api_key: str) -> str:
@@ -1233,7 +1245,9 @@ def home():
 @app.route("/object_calibration", methods=["GET", "POST"])
 def object_calibration():
     global last_g, last_r, last_err_g, last_err_r, last_ra, last_dec
-    
+    global last_ra, last_dec, last_ra_hms, last_dec_dms
+
+                
     user_text = None
     g_text = None
     r_text = None
@@ -1299,6 +1313,15 @@ def object_calibration():
             try:
                 ra_deg = float(ra_decimal)
                 dec_deg = float(dec_decimal)
+
+                last_ra = ra_deg
+                last_dec = dec_deg
+
+                # Convert to sexagesimal for AAVSO
+                coord = SkyCoord(ra_deg * u.deg, dec_deg * u.deg)
+                last_ra_hms = coord.ra.to_string(unit=u.hour, sep=":", precision=2)
+                last_dec_dms = coord.dec.to_string(unit=u.deg, sep=":", precision=2, alwayssign=True)
+
             except ValueError:
                 pass
 
@@ -1680,33 +1703,15 @@ def status():
 
 
 
-@app.route("/calculate_jd", methods=["POST"])
-def calculate_jd():
-    date_str = request.form.get("obs_date")  # YYYY-MM-DD
-    time_str = request.form.get("obs_time")  # HH:MM:SS
 
-    if not date_str or not time_str:
-        jd = None
-    else:
-        t = Time(f"{date_str} {time_str}", format="iso", scale="utc")
-        jd = t.jd
 
-    global last_jd
-    last_jd = jd
 
-    return redirect("/aavso_instructions")
 
 @app.route("/aavso_instructions")
 def aavso_instructions():
 
     # Global storage for last calibration results
-    last_g = None
-    last_r = None
-    last_err_g = None
-    last_err_r = None
-    last_ra = None
-    last_dec = None
-    last_jd = None
+    
 
     return render_template(
         "submit_instructions.html",
@@ -1716,8 +1721,54 @@ def aavso_instructions():
         err_r=last_err_r,
         ra=last_ra,
         dec=last_dec,
-        jd=last_jd if 'last_jd' in globals() else None
+        jd=last_jd, 
+        ra_hms=last_ra_hms,
+        dec_dms=last_dec_dms
+
+
     )
+
+# ============================
+# Julian Date Conversion Route
+# ============================
+
+@app.route("/calculate_jd", methods=["POST"])
+def calculate_jd():
+    global last_jd
+
+    date_str = request.form.get("obs_date")
+    time_str = request.form.get("obs_time")
+
+    if not date_str or not time_str:
+        last_jd = None
+    else:
+        try:
+            t = Time(f"{date_str} {time_str}", format="iso", scale="utc")
+            last_jd = t.jd
+            print("JD calculated:", last_jd)
+        except Exception as e:
+            print("JD conversion error:", e)
+            last_jd = None
+
+    return redirect("/aavso_instructions")
+
+
+@app.route("/convert_radec", methods=["POST"])
+def convert_radec():
+    global last_ra_hms, last_dec_dms
+
+    ra_deg = request.form.get("ra_deg")
+    dec_deg = request.form.get("dec_deg")
+
+    try:
+        coord = SkyCoord(ra=float(ra_deg)*u.deg, dec=float(dec_deg)*u.deg)
+        last_ra_hms = coord.ra.to_string(unit=u.hour, sep=":", precision=2)
+        last_dec_dms = coord.dec.to_string(unit=u.deg, sep=":", precision=2, alwayssign=True)
+    except Exception:
+        last_ra_hms = None
+        last_dec_dms = None
+
+    return redirect("/aavso_instructions")
 
 
 
