@@ -1,182 +1,188 @@
 # 🌌 Stellar Photometry & Calibration Portal  
-Precision. Automation. Scientific Accuracy.
+Precision • Automation • Scientific Integrity
 
-This project is a complete web platform for automated stellar photometry, WCS calibration, and magnitude standardization using Sloan **g/r** or Johnson **B/V** filters. It integrates:
+A complete web platform for **automated stellar photometry**, **WCS calibration**, and **magnitude standardization** using Sloan **g/r** or Johnson **B/V** filters.  
+Designed for observers, students, and researchers who want **professional‑grade results** with a clean, modern interface.
+
+This system performs the entire workflow:
 
 - Astrometry.net plate solving  
 - APASS DR10 catalog querying  
-- Instrumental photometry with background subtraction  
+- Star detection & background‑subtracted photometry  
 - Color‑term and zero‑point calibration  
-- Target‑object analysis  
-- Star‑cluster calibration  
+- Target‑object magnitude extraction  
+- Star‑cluster photometry & CMD generation  
 - Diagnostic plots for transparency and verification  
 
-Whether you're analyzing a single star or an entire cluster, this tool handles the entire workflow end‑to‑end with scientific rigor and a clean, modern UI.
+Whether you're analyzing a single star or an entire cluster, this platform delivers **reproducible, publication‑quality results**.
 
 ---
 
-# 🚀 Quick Start Guide
+# 🚀 Quick Start
 
-This guide walks you through:
-
-1. Cloning the repository  
-2. Creating a virtual environment  
-3. Installing all dependencies  
-4. Setting up environment variables  
-5. Running the website locally  
-
-Everything is designed to be reproducible and beginner‑friendly.
-
----
-
-# 1. Clone the Repository
+## 1. Clone the Repository
 
 ```bash
 git clone https://github.com/YOUR_USERNAME/YOUR_REPO_NAME.git
 cd YOUR_REPO_NAME
 ```
 
-# 2. Clone the Repository
-macOS / Linux:
+---
+
+## 2. Create a Virtual Environment
+
+### macOS / Linux
 ```bash
 python3 -m venv venv
 source venv/bin/activate
 ```
-Windows (PowerShell)
+
+### Windows (PowerShell)
 ```bash
 python -m venv venv
 venv\Scripts\Activate
 ```
 
-# 3. Install All Required Libraries
-Install everything with:
+---
+
+## 3. Install Dependencies
+
 ```bash
 pip install -r requirements.txt
 ```
-If you ever need to regenerate the file:
+
+If you yourself added new libraries, make sure to run this in order to update your requirements.txt:
+
 ```bash
 pip freeze > requirements.txt
 ```
 
-# 4. Set Up Your Environment Variables
+---
 
-This project requires an Astrometry.net API key to perform WCS plate solving.
+## 4. Configure Your Astrometry.net API Key
 
-## 1. Create a `.env` file
+This project requires an API key to perform WCS plate solving.
 
-Create the file in the root of the project (same folder as `app.py`):
+### Step 1 — Create a `.env` file
 
 macOS / Linux:
-    touch .env
-
-Windows (PowerShell):
-    New-Item -Path .env -ItemType File
-
-## 2. Get your Astrometry.net API key
-
-If you don’t have an API key, generate one at:
-
-https://nova.astrometry.net
-
-1. go to https://nova.astrometry.net
-2. Press "sign in" on the top right corner 
-3. Choose any account you would like to sign in with
-4. Go to "Profile" seen on the left side of the screen 
-5. You will see "my API key: _____________" (It will look like letters: asdfsdfgghjgho)
-6. insert that API key like this: ASTRO_LOGIN=asdfsdfgghjgho
-
-## 3. Add the key to `.env`
-
-Open `.env` and paste:
-
-ASTRO_LOGIN=YOUR_ASTROMETRY_API_KEY
-
-
-Replace YOUR_ASTROMETRY_API_KEY with your actual key.
-
-## 4. Ensure Flask loads the `.env` file
-
-If needed, add this to the top of `app.py`:
+```bash
+touch .env
 ```
+
+Windows:
+```bash
+New-Item -Path .env -ItemType File
+```
+
+### Step 2 — Get your API key
+
+1. Go to https://nova.astrometry.net  
+2. Sign in  
+3. Click **Profile**  
+4. Copy your API key (looks like: `asdfsdfgghjgho`)  
+
+### Step 3 — Add it to `.env`
+
+```
+ASTRO_LOGIN=YOUR_ASTROMETRY_API_KEY
+```
+
+### Step 4 — Ensure Flask loads it
+
+At the top of `app.py`:
+
+```python
 from dotenv import load_dotenv
 load_dotenv()
-```. 
-## 5. Verify it works
-
-Run:
 ```
-python app.py
-```
-Then inside your code, print:
-```
-print(os.environ.get("ASTRO_LOGIN"))
-```
-If it prints your key, the environment is configured correctly.
 
+### Step 5 — Verify
 
-
-
-
-# 5. Run the Website
 ```bash
 python app.py
 ```
-Or:
+
+Inside your code:
+
+```python
+print(os.environ.get("ASTRO_LOGIN"))
+```
+
+If it prints your key, you're good.
+
+---
+
+## 5. Run the Website
+
+```bash
+python app.py
+```
+
+or
+
 ```bash
 flask run
 ```
-You should see something like this:
-Running on http://127.0.0.1:5000
 
-Open that link in your browser
+Open:
 
+```
+http://127.0.0.1:5000
+```
 
-# 6. Using the Platform
-⭐ Object Calibration
-Enter RA/Dec (decimal or HMS/DMS)
+---
 
-Choose photometric system (Sloan g/r or Johnson B/V) 
-*NOTE* Johnson B/V is unavailable in this current version
+# 🌠 Using the Platform
 
-Upload FITS files or provide file paths
+## ⭐ Object Calibration (Single‑Star Photometry)
 
-The system performs:
+1. Enter RA/Dec (decimal or HMS/DMS)  
+2. Choose photometric system (Sloan g/r or Johnson B/V)  
+   - *Note: Johnson B/V is not yet implemented*  
+3. Upload FITS files or provide file paths  
+4. Click **Run Calibration**
 
-WCS solving
+The system automatically performs:
 
-APASS DR10 querying
+- WCS solving  
+- APASS DR10 catalog query  
+- Star detection  
+- Aperture photometry with background subtraction  
+- Color‑term calibration  
+- Zero‑point calibration  
+- Final standardized magnitudes  
+- Diagnostic plots (WCS check, color term, offset plot)
 
-Star detection
+Results appear instantly with:
 
-Flux extraction
+- Standard g and r magnitudes  
+- Uncertainties  
+- Calibration coefficients  
+- WCS verification images  
+- Color‑term and zero‑point plots  
 
-Color‑term calibration
+---
 
-Zero‑point calibration
+## ⭐ Star Cluster Calibration
 
-Final standardized magnitudes
-
-Results + plots appear automatically
-
-⭐ Star Cluster Calibration
-Upload two FITS images
-
-Enter cluster center
-
-Choose inner/outer radii
+1. Upload Sloan g and r FITS images  
+2. Enter cluster center (RA/Dec)  
+3. Choose inner/outer radii  
+4. Run the calibration
 
 The system:
 
-Splits cluster vs calibration stars
+- Splits APASS stars into cluster vs calibration sets  
+- Performs photometry on both images  
+- Computes calibrated magnitudes  
+- Generates a **Color–Magnitude Diagram (CMD)**  
+- Outputs calibration parameters and plots  
 
-Computes calibrated magnitudes
+---
 
-Generates a CMD plot
+# 📁 Project Structure
 
-Outputs calibration parameters
-
-
-## The Project Structure:
 ```
 project/
 │
@@ -184,7 +190,8 @@ project/
 ├── templates/                 # HTML templates
 │   ├── index.html
 │   ├── object_calibration.html
-│   └── star_cluster_calibration.html
+│   ├── star_cluster_calibration.html
+│   └── aavso_instructions.html
 │
 ├── static/                    # Saved plots and assets
 │
@@ -194,5 +201,50 @@ project/
 └── README.md                  # This file
 ```
 
+---
 
+# 🧪 Scientific Notes
 
+### Photometry
+- Aperture photometry with annulus background subtraction  
+- Negative fluxes safely clipped  
+- Instrumental magnitudes computed via  
+  \(-2.5 \log_{10}(F)\)
+
+### Calibration
+- Color‑term calibration using APASS DR10  
+- Linear least‑squares regression  
+- Zero‑point offset correction  
+- Physically meaningful constraints enforced  
+
+### WCS
+- Exact Astrometry.net WCS headers embedded into FITS  
+- Verified via diagnostic overlay plots  
+
+---
+
+# 🟦 AAVSO Submission Support
+
+The platform includes:
+
+- Automatic RA/Dec conversion to **HH:MM:SS / DD:MM:SS**  
+- Automatic Julian Date conversion  
+- Copy‑to‑clipboard buttons  
+- A full step‑by‑step WebObs submission guide  
+- Notes on comparison/check star selection  
+- Warnings about filter consistency (TG/TR)  
+
+Everything you need to submit scientifically valid data.
+
+---
+
+# 🤝 Contributing
+
+Pull requests are welcome!  
+If you’d like to add features, improve UI/UX, or extend photometric support, feel free to open an issue.
+
+---
+
+# 📜 License
+
+MIT License 
