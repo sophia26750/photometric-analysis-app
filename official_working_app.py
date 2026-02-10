@@ -282,7 +282,7 @@ def full_calibration_with_subid(image, wcs_image_name, subid_key):
     # 6. Query APASS around the solved coordinates
     ra = astro_results["ra"]
     dec = astro_results["dec"]
-    radius = round(astro_results["radius"] * 0.6, 1)
+    radius = round(astro_results["radius"] * 0.55, 1)
 
     num_rows = query_apass_to_csv(ra, dec, radius, "apass_subset.csv")
     status_message = f"Done!"
@@ -330,7 +330,7 @@ def full_calibration(image, wcs_image_name):
     # 6. Query APASS around the solved coordinates
     ra = astro_results["ra"]
     dec = astro_results["dec"]
-    radius = round(astro_results["radius"] * 0.5, 1)
+    radius = round(astro_results["radius"] * 0.45, 1)
 
     num_rows = query_apass_to_csv(ra, dec, radius, "apass_subset.csv")
     status_message = f"Done!"
@@ -1566,10 +1566,10 @@ def star_cluster_calibration():
             green_image = g_text
             red_image = r_text
 
-            #full_calibration(green_image, "wcs_green_solution.fits")
-            #full_calibration(red_image, "wcs_red_solution.fits")
-            full_calibration_with_subid(green_image, "wcs_green_solution.fits", os.environ.get("GREEN_SUBID_SC"))
-            full_calibration_with_subid(red_image, "wcs_red_solution.fits", os.environ.get("RED_SUBID_SC"))
+            full_calibration(green_image, "wcs_green_solution.fits")
+            full_calibration(red_image, "wcs_red_solution.fits")
+            #full_calibration_with_subid(green_image, "wcs_green_solution.fits", os.environ.get("GREEN_SUBID_SC"))
+            #full_calibration_with_subid(red_image, "wcs_red_solution.fits", os.environ.get("RED_SUBID_SC"))
 
             # ============================
             # CHECK IF TARGET IS IN IMAGE
