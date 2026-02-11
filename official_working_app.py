@@ -40,6 +40,7 @@ from photutils.detection import DAOStarFinder
 global status_message
 global last_jd
 status_message = "Waiting for user input..."
+error_message = None
 last_g = None
 last_r = None
 last_err_g = None
@@ -462,6 +463,8 @@ def lsrl(x, y):
 
 
 def magnitudes(csv_file, green_image, red_image, n, RA, DEC):
+    global status_message
+
     data = ascii.read(csv_file, format='csv')
     hdul_g = fits.open(green_image)
     hdul_r = fits.open(red_image)
@@ -767,7 +770,8 @@ def magnitudes(csv_file, green_image, red_image, n, RA, DEC):
     print("Standard error (green offset):", m2_b2[2])
     print("========================\n")
 
-    
+    status_message = "Done!"
+
     return (
         standard_g_target[0], 
         standard_r_target[0], 
@@ -1099,6 +1103,9 @@ def star_cluster_magnitudes(
     outer_radius_arcmin,
     output_calib_csv="cluster_calibrated_magnitudes.csv"
 ):
+    
+    global status_message
+
     calib_cat = pd.read_csv("calibration_stars.csv")
     ap_ra  = calib_cat["ra"].values
     ap_dec = calib_cat["dec"].values
@@ -1225,6 +1232,10 @@ def star_cluster_magnitudes(
     plt.savefig(offset_path, dpi=150, bbox_inches="tight")
     plt.close()
 
+
+
+    status_message = "Done!"
+
     return cmd_path, color_path, offset_path, Tgr, Cgr, Tg, Cg
 
 
@@ -1246,7 +1257,8 @@ def home():
 def object_calibration():
     global last_g, last_r, last_err_g, last_err_r, last_ra, last_dec
     global last_ra, last_dec, last_ra_hms, last_dec_dms
-
+    global error_message
+    global status_message
                 
     user_text = None
     g_text = None
@@ -1285,6 +1297,8 @@ def object_calibration():
 
     upload_folder = "uploads" 
     os.makedirs(upload_folder, exist_ok=True)
+
+    
 
     if request.method == "POST":
         # Single input case
@@ -1389,10 +1403,16 @@ def object_calibration():
 
             # Out-of-bounds check
             if tx < 0 or tx >= nx or ty < 0 or ty >= ny:
-                return render_template(
-                    "object_calibration.html",
-                    error_message="❌ The target RA/Dec is outside the image boundaries. Please check your coordinates or upload a larger field."
-                )
+
+                    status_message = "❌ The target RA/Dec is outside the image boundaries."
+
+                    error_message = "❌ The target RA/Dec (Star coordinates) are outside the image boundaries. Please retry with different coordinates or with a different image."
+
+                    return render_template(
+                        "object_calibration.html",
+                        error_message=error_message, 
+                        status_message=status_message
+                    )
 
 
         standard_g_target, standard_r_target, error_g, error_r, Tgr, Cgr, Tg, Cg, color_term_path, green_offset_path, red_wcs_path, green_wcs_path= magnitudes(
@@ -1406,8 +1426,8 @@ def object_calibration():
 
     # If user typed paths instead, use those
     elif g_text and r_text:
-        full_calibration_with_subid(g_text, "wcs_green_solution.fits", os.environ.get("GREEN_SUBID"))  # GREEN_SUBID_JUL15  GREEN_SUBID_JUL16
-        num_rows = full_calibration_with_subid(r_text, "wcs_red_solution.fits", os.environ.get("RED_SUBID")) # RED_SUBID_JUL15 RED_SUBID_JUL16
+        full_calibration_with_subid(g_text, "wcs_green_solution.fits", os.environ.get("GREEN_SUBID_JUL15"))  # GREEN_SUBID_JUL15  GREEN_SUBID_JUL16
+        num_rows = full_calibration_with_subid(r_text, "wcs_red_solution.fits", os.environ.get("RED_SUBID_JUL15")) # RED_SUBID_JUL15 RED_SUBID_JUL16
         
         
         #full_calibration(g_text, "wcs_green_solution.fits")
@@ -1429,10 +1449,16 @@ def object_calibration():
 
             # Out-of-bounds check
             if tx < 0 or tx >= nx or ty < 0 or ty >= ny:
-                return render_template(
-                    "object_calibration.html",
-                    error_message="❌ The target RA/Dec is outside the image boundaries. Please check your coordinates or upload a larger field."
-                )
+
+                    status_message = "❌ The target RA/Dec is outside the image boundaries."
+
+                    error_message = "❌ The target RA/Dec is outside the image boundaries."
+
+                    return render_template(
+                        "object_calibration.html",
+                        error_message=error_message, 
+                        status_message=status_message
+                    )
 
             
         if calibration_mode == "custom":
@@ -1479,7 +1505,8 @@ def object_calibration():
         red_wcs_path=red_wcs_path, 
         green_wcs_path=green_wcs_path, 
         ra_deg=ra_deg, 
-        dec_deg=dec_deg
+        dec_deg=dec_deg, 
+        error_message=error_message
     )
 
 
@@ -1625,9 +1652,15 @@ def star_cluster_calibration():
 
                 # Out-of-bounds check
                 if tx < 0 or tx >= nx or ty < 0 or ty >= ny:
+
+                    status_message = "❌ The target RA/Dec is outside the image boundaries."
+
+                    error_message = "❌ The target RA/Dec is outside the image boundaries."
+
                     return render_template(
                         "object_calibration.html",
-                        error_message="❌ The target RA/Dec is outside the image boundaries. Please check your coordinates or upload a larger field."
+                        error_message=error_message, 
+                        status_message=status_message
                     )
 
 
@@ -1771,6 +1804,7 @@ def convert_radec():
         last_dec_dms = None
 
     return redirect("/aavso_instructions")
+
 
 
 
