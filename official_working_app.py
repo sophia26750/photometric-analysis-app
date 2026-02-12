@@ -450,16 +450,99 @@ def target_flux(x, y, radius, image):
     return np.array([max(final_flux[0], 0)])
 
 
+# def lsrl(x, y):
+#     x = np.array(x)
+#     y = np.array(y)
+
+#     if np.std(x) < 1e-3 or np.std(y) < 1e-3:
+#         raise ValueError("Not enough color variation for calibration.")
+
+#     m, b = np.polyfit(x, y, 1)
+#     sd = np.std(y - (m*x + b))
+#     return m, b, sd
+
 def lsrl(x, y):
-    x = np.array(x)
-    y = np.array(y)
+    
+    N1 = len(x)
+    
+    sum_xsq1 = 0
+    for terms in x:
+        sum_xsq1 += terms ** 2
 
-    if np.std(x) < 1e-3 or np.std(y) < 1e-3:
-        raise ValueError("Not enough color variation for calibration.")
+    sum_xy1 = 0
+    for i in range(len(x)):
+        sum_xy1 += x[i] * y[i]
 
-    m, b = np.polyfit(x, y, 1)
-    sd = np.std(y - (m*x + b))
-    return m, b, sd
+    sum_x1 = 0
+    for terms in x:
+        sum_x1 += terms
+        
+    sum_y1 = 0
+    for terms in y:
+        sum_y1 += terms 
+    
+    q1 = np.array([[sum_y1], [sum_xy1]])
+    p1 = np.array([[N1, sum_x1], [sum_x1, sum_xsq1]])
+    matrix1 = np.dot(np.linalg.inv(p1), q1)
+    
+    m1 = matrix1[1]
+    b1 = matrix1[0]
+
+    sd1 = 0
+    
+    for i in range(len(x)):
+        sd1 += ((y[i] - (m1 * x[i] + b1)) ** 2)
+        
+    sd1 /= len(x)
+    sd1 = sd1 ** 0.5
+    
+    x2 = []
+    y2 = []
+    
+    for i in range(len(x)):
+        if (((y[i] - (m1 * x[i] + b1)) ** 2) < 4 * (sd1 ** 2)):
+            x2.append(x[i])
+            y2.append(y[i])
+            
+    N2 = len(x2)
+    
+    sum_xsq2 = 0
+    for terms in x2:
+        sum_xsq2 += terms ** 2
+
+    sum_xy2 = 0
+    for i in range(len(x2)):
+        sum_xy2 += x2[i] * y2[i]
+
+    sum_x2 = 0
+    for terms in x2:
+        sum_x2 += terms
+        
+    sum_y2 = 0
+    for terms in y2:
+        sum_y2 += terms 
+    
+    q2 = np.array([[sum_y2], [sum_xy2]])
+    p2 = np.array([[N2, sum_x2], [sum_x2, sum_xsq2]])
+    matrix2 = np.dot(np.linalg.inv(p2), q2)
+    
+    m2 = matrix2[1]
+    b2 = matrix2[0]
+
+    sd2 = 0
+    
+    for i in range(len(x2)):
+        sd2 += ((y2[i] - (m2 * x2[i] + b2)) ** 2)
+        
+    sd2 /= len(x2)
+    sd2 = sd2 ** 0.5
+        
+
+    m2 = float(matrix2[1][0])
+    b2 = float(matrix2[0][0])
+    sd2 = float(np.squeeze(sd2))
+    #slope, y-int, error
+    return m2, b2, sd2
 
 
 def magnitudes(csv_file, green_image, red_image, n, RA, DEC):
@@ -741,7 +824,15 @@ def magnitudes(csv_file, green_image, red_image, n, RA, DEC):
 
     standard_r_target = standard_g_target - standard_g_r_target
 
-    error_g, error_r = m1_b1[2], m2_b2[2]
+    # error_g, error_r = m1_b1[2], m2_b2[2]
+
+    sigma1 = m1_b1[2]
+    sigma2 = m2_b2[2]
+
+    error_g = (sigma1**2 + sigma2**2)**0.5
+    error_r = (2*sigma1**2 + sigma2**2)**0.5
+
+
     Tgr = m1_b1[0]
     Cgr = m1_b1[1]
     Tg  = m2_b2[0]
@@ -773,14 +864,14 @@ def magnitudes(csv_file, green_image, red_image, n, RA, DEC):
     status_message = "Done!"
 
     return (
-        standard_g_target[0], 
-        standard_r_target[0], 
-        error_g, 
-        error_r, 
-        Tgr, 
-        Cgr,
-        Tg,
-        Cg,
+        round(standard_g_target[0], 5), 
+        round(standard_r_target[0], 5), 
+        round(error_g, 5), 
+        round (error_r, 5), 
+        round(Tgr, 4), 
+        round(Cgr, 4),
+        round(Tg, 4),
+        round(Cg, 4),
         color_term_path,
         green_offset_path,
         red_wcs_path,
@@ -1426,8 +1517,8 @@ def object_calibration():
 
     # If user typed paths instead, use those
     elif g_text and r_text:
-        full_calibration_with_subid(g_text, "wcs_green_solution.fits", os.environ.get("GREEN_SUBID_JUL15"))  # GREEN_SUBID_JUL15  GREEN_SUBID_JUL16
-        num_rows = full_calibration_with_subid(r_text, "wcs_red_solution.fits", os.environ.get("RED_SUBID_JUL15")) # RED_SUBID_JUL15 RED_SUBID_JUL16
+        full_calibration_with_subid(g_text, "wcs_green_solution.fits", os.environ.get("GREEN_SUBID_JUL16"))  # GREEN_SUBID_JUL15  GREEN_SUBID_JUL16
+        num_rows = full_calibration_with_subid(r_text, "wcs_red_solution.fits", os.environ.get("RED_SUBID_JUL16")) # RED_SUBID_JUL15 RED_SUBID_JUL16
         
         
         #full_calibration(g_text, "wcs_green_solution.fits")
@@ -1581,9 +1672,12 @@ def star_cluster_calibration():
         # -----------------------------
         cluster_radius_arcmin = request.form.get("cluster_radius_arcmin")
         if not cluster_radius_arcmin:
+
+            status_message = "Please enter a cluster radius in arcminutes"
             return render_template(
                 "star_cluster_calibration.html",
-                error_message="Please enter a cluster radius in arcminutes."
+                error_message="Please enter a cluster radius in arcminutes.", 
+                status_message=status_message
             )
 
         try:

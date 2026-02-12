@@ -392,6 +392,61 @@ def target_flux(x, y, radius, image):
 
     return np.array([max(final_flux[0], 0)])
 
+def show_flux_cutouts(image, x, y, radius, n_show=12):
+    """
+    Visualize the stars used for flux measurement.
+    Shows each star with:
+        - the circular aperture
+        - the background annulus
+    """
+    data = fits.getdata(image)
+    ny, nx = data.shape
+
+    # choose a subset if too many
+    N = len(x)
+    n_show = min(n_show, N)
+    idx = np.random.choice(N, n_show, replace=False)
+
+    fig, axes = plt.subplots(3, 4, figsize=(12, 9))
+    axes = axes.flatten()
+
+    for k, ax in enumerate(axes[:n_show]):
+        i = idx[k]
+        cx, cy = x[i], y[i]
+
+        # cutout size = 8×radius
+        half = int(radius * 4)
+        x1, x2 = int(cx - half), int(cx + half)
+        y1, y2 = int(cy - half), int(cy + half)
+
+        # bounds check
+        x1 = max(x1, 0); y1 = max(y1, 0)
+        x2 = min(x2, nx); y2 = min(y2, ny)
+
+        cut = data[y1:y2, x1:x2]
+
+        ax.imshow(cut, cmap="gray", origin="lower",
+                  vmin=np.percentile(cut, 5),
+                  vmax=np.percentile(cut, 99))
+
+        # aperture circle
+        circ = plt.Circle((cx - x1, cy - y1), radius,
+                          edgecolor='yellow', facecolor='none', lw=1.5)
+        ax.add_patch(circ)
+
+        # annulus
+        ann = plt.Circle((cx - x1, cy - y1), radius+3,
+                         edgecolor='cyan', facecolor='none', lw=1)
+        ax.add_patch(ann)
+        ann2 = plt.Circle((cx - x1, cy - y1), radius+6,
+                          edgecolor='cyan', facecolor='none', lw=1)
+        ax.add_patch(ann2)
+
+        ax.set_title(f"Star {i}")
+        ax.set_xticks([]); ax.set_yticks([])
+
+    plt.tight_layout()
+    plt.show()
 
 
 def lsrl(x, y):
@@ -566,7 +621,11 @@ def magnitudes(csv_file, green_image, red_image, n, RA, DEC):
 
         
     green_flux = flux(x_green, y_green, 5, green_image)
+    show_flux_cutouts(green_image, x_green, y_green, radius=5)
+
     red_flux = flux(x_red, y_red, 5, red_image)
+    show_flux_cutouts(red_image, x_red, y_red, radius=5)
+
 
 
     valid_flux_g = []
@@ -716,14 +775,14 @@ def magnitudes(csv_file, green_image, red_image, n, RA, DEC):
         ) 
 
 
-#full_calibration_with_subid("/Users/admin/YSPA-old-things/wcs-sn/r_july13-t24-mvn-green_stacked.fits", "wcs_green_solution.fits", os.environ.get("GREEN_SUBID")) # "/Users/admin/source/yspa-research-code/fits_files/r_july15-home40-mvn-green-all_stacked.fits"
-#num_rows = full_calibration_with_subid("/Users/admin/YSPA-old-things/wcs-sn/r_july13-t24-mvn-red_stacked.fits", "wcs_red_solution.fits", os.environ.get("RED_SUBID"))  #/Users/admin/source/yspa-research-code/fits_files/r_july15-home40-mvn-red-all_stacked.fits"
+full_calibration_with_subid("/Users/admin/YSPA-old-things/wcs-sn/r_july13-t24-mvn-green_stacked.fits", "wcs_green_solution.fits", os.environ.get("GREEN_SUBID")) # "/Users/admin/source/yspa-research-code/fits_files/r_july15-home40-mvn-green-all_stacked.fits"
+num_rows = full_calibration_with_subid("/Users/admin/YSPA-old-things/wcs-sn/r_july13-t24-mvn-red_stacked.fits", "wcs_red_solution.fits", os.environ.get("RED_SUBID"))  #/Users/admin/source/yspa-research-code/fits_files/r_july15-home40-mvn-red-all_stacked.fits"
 #full_calibration("/Users/admin/YSPA-old-things/wcs-sn/r_july13-t24-mvn-green_stacked.fits", "wcs_green_solution.fits") 
 #num_rows = full_calibration("/Users/admin/YSPA-old-things/wcs-sn/r_july13-t24-mvn-red_stacked.fits", "wcs_red_solution.fits")
 
-full_calibration("/Users/admin/YSPA-old-things/wcs-sn/r_july15-home40-mvn-green-all_stacked.fits", "wcs_green_solution.fits") 
-num_rows = full_calibration("/Users/admin/YSPA-old-things/wcs-sn/r_july15-home40-mvn-red-all_stacked.fits", "wcs_red_solution.fits")
-num_rows = 15
+#full_calibration("/Users/admin/YSPA-old-things/wcs-sn/r_july15-home40-mvn-green-all_stacked.fits", "wcs_green_solution.fits") 
+#num_rows = full_calibration("/Users/admin/YSPA-old-things/wcs-sn/r_july15-home40-mvn-red-all_stacked.fits", "wcs_red_solution.fits")
+#num_rows = 15
 print(magnitudes(
     "apass_subset.csv",
     "wcs_green_solution.fits",
