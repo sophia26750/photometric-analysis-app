@@ -202,6 +202,30 @@
             fetch("/status")
                 .then(response => response.text())
                 .then(text => {
+                    const statusLine = document.getElementById("status-line");
+                    statusLine.textContent = text;
+
+                    // Only change color, do NOT stop printing anything
+                    if (
+                        text.includes("Please enter RA/Dec in either decimal or HMS/DMS format.") ||
+                        text.includes("outside the image boundaries") ||
+                        text.includes("Please enter a cluster radius in arcminutes.")
+                    ) {
+                        statusLine.style.color = "#ff4444";   // red
+                    } else {
+                        statusLine.style.color = "#00ff00";   // green
+                    }
+                });
+        }
+        setInterval(pollStatus, 700);
+    </script>
+
+
+    <script>
+        function pollStatus() {
+            fetch("/status")
+                .then(response => response.text())
+                .then(text => {
                     document.getElementById("status-line").textContent = text;
                 });
         }
